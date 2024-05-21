@@ -1,0 +1,1761 @@
+---
+title: "Immune Entropy and Stability"
+author: "Alper"
+date: "2023-08-11"
+output: html_document
+---
+# pre-titers mRNA-1273
+```{r}
+mRNA1273_ab %>% 
+  filter(subject_identifier %in% trivac_imm$subject_identifier) %>%
+  arrange(desc(MIA_CoV19_S1_BAU_Titer_Pre))
+```
+# immunotype age 
+```{r}
+ggplot(trivac_imm, aes(x=cluster_number, y=age)) +
+    geom_jitter(aes(fill=cluster_number,color=cluster_number), alpha=1, width = 0.3,size=1.5) +
+    geom_boxplot(aes(fill=cluster_number), alpha=0.7,outlier.size=0,outlier.colour="white") +
+    scale_fill_manual("Immunotypes", values=cols_cluster) +
+    scale_color_manual("Immunotypes", values=cols_cluster) +
+    theme_classic()+xlab("Immunotypes")+
+    stat_summary(aes(y=age, x=cluster_number),size=0.2)+
+  theme(legend.position = "none")+
+  ylab("Age (years)")
+ggsave(file = paste0(trivaccine.dir, "imm_age.pdf", sep=""), width =4 , height =2.5)
+
+```
+
+# vaccine response quartiles in immunotypes Figure 1B
+```{r}
+trivac_resp_quartiles %>%
+  mutate(Flu_HI_Q_maxRBA = recode(Flu_HI_Q_maxRBA,
+                             "1" = "Q1",
+                             "2" = "Q2",
+                             "3" = "Q3",
+                             "4" = "Q4")) %>%
+  mutate(PCV13_IgG_Q_maxRBA = recode(PCV13_IgG_Q_maxRBA,
+                             "1" = "Q1",
+                             "2" = "Q2",
+                             "3" = "Q3",
+                             "4" = "Q4")) %>%
+  mutate(mRNA1273_Q_d28 = recode(mRNA1273_Q_d28,
+                             "1" = "Q1",
+                             "2" = "Q2",
+                             "3" = "Q3",
+                             "4" = "Q4")) %>%
+  left_join(immunotype, by="subject_identifier") %>%
+  dplyr::select(-ResponseGroup_Triple)%>%
+  drop_na(cluster_number) %>%
+  tidyr::pivot_longer(
+    cols = -c(subject_identifier, cluster_number),
+    names_to = "variable",
+    values_to = "value"
+  ) %>%
+  mutate(vaccine = case_when(variable == "Flu_HI_Q_maxRBA" ~ "28-days post QIV",
+                             variable == "PCV13_IgG_Q_maxRBA" ~ "28-days post PCV13",
+                             variable == "mRNA1273_Q_d28" ~ "28-days post mRNA1273",
+                             TRUE ~ "0")) %>% 
+  mutate(vaccine = factor(vaccine, levels = c("28-days post QIV", "28-days post PCV13","28-days post mRNA1273"))) %>% 
+  mutate(value = factor(value, levels = c("Q4", "Q3","Q2", "Q1"))) %>% 
+  ggplot(aes(x = vaccine, 
+             stratum = value, 
+             alluvium = subject_identifier, label = value)) +
+  geom_flow(stat = "alluvium",lode.guidance = "leftright",
+            aes(fill=cluster_number)) +
+  scale_fill_manual("Immunotype", values = cols_cluster)+
+  scale_color_manual("Immunotype", values = cols_cluster) +
+  geom_stratum() +
+  #scale_fill_viridis_d("Response group") +
+  geom_text(stat = "stratum",
+            aes(label = after_stat(stratum)), color="black") +
+  theme_classic()+
+  theme(axis.text.y = element_blank(),
+        axis.ticks.y = element_blank(),
+        axis.line.y = element_blank(),
+        axis.line.x = element_blank()) +
+  labs(y="")+  
+  theme(legend.position = "top")
+
+ggsave(file = paste0(trivaccine.dir, "trivaccine_immunotype.pdf", sep=""), width =8 , height =5)
+
+
+trivac_resp_quartiles %>%
+  mutate(Flu_HI_Q_maxRBA = recode(Flu_HI_Q_maxRBA,
+                             "1" = "Q1",
+                             "2" = "Q2",
+                             "3" = "Q3",
+                             "4" = "Q4")) %>%
+  mutate(PCV13_IgG_Q_maxRBA = recode(PCV13_IgG_Q_maxRBA,
+                             "1" = "Q1",
+                             "2" = "Q2",
+                             "3" = "Q3",
+                             "4" = "Q4")) %>%
+  mutate(mRNA1273_Q_d28 = recode(mRNA1273_Q_d28,
+                             "1" = "Q1",
+                             "2" = "Q2",
+                             "3" = "Q3",
+                             "4" = "Q4")) %>%
+  left_join(vital_subject, by="subject_identifier") %>%
+  left_join(immunotype, by="subject_identifier") %>%
+  drop_na(cluster_number)%>%
+  dplyr::select(-c(sex,age,BMI,ResponseGroup_Triple,cluster_number))%>%
+  tidyr::pivot_longer(
+    cols = -c(subject_identifier, age_group),
+    names_to = "variable",
+    values_to = "value"
+  ) %>%
+  mutate(vaccine = case_when(variable == "Flu_HI_Q_maxRBA" ~ "28-days post QIV",
+                             variable == "PCV13_IgG_Q_maxRBA" ~ "28-days post PCV13",
+                             variable == "mRNA1273_Q_d28" ~ "28-days post mRNA1273",
+                             TRUE ~ "0")) %>% 
+  mutate(vaccine = factor(vaccine, levels = c("28-days post QIV", "28-days post PCV13","28-days post mRNA1273"))) %>% 
+  mutate(value = factor(value, levels = c("Q4", "Q3","Q2", "Q1"))) %>% 
+  ggplot(aes(x = vaccine, 
+             stratum = value, 
+             alluvium = subject_identifier, label = value)) +
+  geom_flow(stat = "alluvium",lode.guidance = "leftright",
+            aes(fill=age_group)) +
+  scale_fill_manual("Age Group", values = cols_agegroup)+
+  scale_color_manual("Age Group", values = cols_agegroup) +
+  geom_stratum() +
+  geom_text(stat = "stratum",
+            aes(label = after_stat(stratum)), color="black") +
+  theme_classic()+
+  theme(axis.text.y = element_blank(),
+        axis.ticks.y = element_blank(),
+        axis.line.y = element_blank(),
+        axis.line.x = element_blank()) +
+  labs(y="")+  
+  theme(legend.position = "top")
+
+ggsave(file = paste0(trivaccine.dir, "trivaccine_age.pdf", sep=""), width =8 , height =5)
+```
+
+# chi square immunotype - triple vaccine response group
+```{r}
+chi_table <- trivac_resp_quartiles %>%
+  left_join(vital_subject, by="subject_identifier") %>%
+  left_join(immunotype, by="subject_identifier") %>%
+  drop_na(cluster_number) %>% 
+  select(ResponseGroup_Triple,cluster_number) 
+  
+chi_table<- table(chi_table$cluster_number, chi_table$ResponseGroup_Triple)
+
+chisq_test(chi_table)
+
+library("chisq.posthoc.test")
+chisq.posthoc.test(chi_table,method = "BH") %>% filter(Value %in% "p values")
+chisq.posthoc.test(chi_table)
+
+```
+# barplots ResponseGroup_Triple in immunotypes Figure 1C
+```{r}
+trivac_resp_quartiles %>%
+  mutate(ResponseGroup_Triple = recode(ResponseGroup_Triple,
+                             "1" = "TQ1",
+                             "2" = "TQ2",
+                             "3" = "TQ3",
+                             "4" = "TQ4")) %>%
+  left_join(immunotype, by="subject_identifier") %>%
+  group_by(ResponseGroup_Triple) %>%
+  drop_na(cluster_number) %>%
+  mutate(cluster_number = forcats::fct_rev(factor(cluster_number))) %>%
+  ggplot(aes(group = cluster_number, y=1, x=ResponseGroup_Triple, fill=cluster_number))+
+  geom_bar(position="fill", stat="identity")+
+  xlab("Triple vaccine response quartile") + 
+  ylab("Proportion (%)")+
+  scale_fill_manual(values = cols_cluster)+
+  theme_classic()+
+  theme(legend.position = "none")+
+  scale_y_continuous(labels = scales::percent)
+ggsave(file = paste0(trivaccine.dir, "Immunotype_in_ResTri.pdf", sep=""), width =3 , height =3)
+
+trivac_resp_quartiles %>%
+  mutate(ResponseGroup_Triple = recode(ResponseGroup_Triple,
+                             "1" = "TQ1",
+                             "2" = "TQ2",
+                             "3" = "TQ3",
+                             "4" = "TQ4")) %>%
+  left_join(vital_subject, by="subject_identifier") %>%
+  left_join(immunotype, by="subject_identifier") %>%
+  group_by(ResponseGroup_Triple) %>%
+  drop_na(age_group,cluster_number) %>%
+  mutate(age_group = forcats::fct_rev(factor(age_group))) %>%
+  ggplot(aes(group = age_group, y=1, x=ResponseGroup_Triple, fill=age_group))+
+  geom_bar(position="fill", stat="identity")+
+  xlab("Triple vaccine response quartile") + 
+  ylab("Proportion (%)")+
+  scale_fill_manual(values = cols_agegroup)+
+  theme_classic()+
+  theme(legend.position = "none")+
+  scale_y_continuous(labels = scales::percent)
+ggsave(file = paste0(trivaccine.dir, "Age_in_ResTri.pdf", sep=""), width =3 , height =3)
+
+
+table_trires_imm <- trivac_resp_quartiles %>%
+  mutate(ResponseGroup_Triple = recode(ResponseGroup_Triple,
+                             "1" = "TQ1",
+                             "2" = "TQ2",
+                             "3" = "TQ3",
+                             "4" = "TQ4")) %>%
+  left_join(immunotype, by="subject_identifier") %>%
+  group_by(ResponseGroup_Triple) %>%
+  drop_na(cluster_number)
+
+table_trires_imm%>% 
+  select(cluster_number,ResponseGroup_Triple) %>%
+  tbl_summary(by = c(cluster_number), percent = "row")
+
+table(table_trires_imm$cluster_number,table_trires_imm$ResponseGroup_Triple)
+
+```
+# number of quartile changes between vaccines
+```{r}
+df <- trivac_resp_quartiles %>% left_join(immunotype) %>% drop_na(cluster_number, ResponseGroup_Triple) %>% select(-c(ResponseGroup_Triple,cluster_number)) %>% reshape2::melt(.) %>%
+  mutate_at(c("Flu_HI_Q_maxRBA","PCV13_IgG_Q_maxRBA","mRNA1273_Q_d28"), list(~as.numeric(.))) %>% drop_na()
+
+
+
+same_score <- function(row) {
+  if (any(is.na(row))) {
+    return(FALSE) # Return FALSE if there is any NA value
+  }
+  row[1] == row[2] && row[2] == row[3]
+}
+
+same_or_one_diff <- function(row) {
+  if (any(is.na(row))) {
+    return(FALSE) # Return FALSE if there is any NA value
+  }
+  abs(row[1] - row[2]) <= 1 && abs(row[2] - row[3]) <= 1 && abs(row[1] - row[3]) <= 1
+}
+
+same_or_two_diff <- function(row) {
+  if (any(is.na(row))) {
+    return(FALSE) # Return FALSE if there is any NA value
+  }
+  abs(row[1] - row[2]) <= 2 && abs(row[2] - row[3]) <= 2 && abs(row[1] - row[3]) <= 2
+}
+
+df_complete <- df[complete.cases(df), ]
+
+same_score_count <- sum(apply(df_complete[,2:4], 1, same_score))
+same_or_one_diff_count <- sum(apply(df_complete[,2:4], 1, same_or_one_diff))
+same_or_two_diff_count <- sum(apply(df_complete[,2:4], 1, same_or_two_diff))
+
+same_score_percentage <- (same_score_count / nrow(df_complete)) * 100
+same_or_one_diff_percentage <- (same_or_one_diff_count / nrow(df_complete)) * 100
+same_or_two_diff_percentage <- (same_or_two_diff_count / nrow(df_complete)) * 100
+
+same_or_two_diff_percentage<- same_or_two_diff_percentage
+same_or_one_diff_percentage<- same_or_one_diff_percentage
+
+round(same_score_percentage,0)
+round(same_or_one_diff_percentage,0)
+round(same_or_two_diff_percentage,0)
+```
+
+
+# Model Triple vaccine response ~ immunotype
+```{r}
+model_cimm <-trivac_imm %>%
+  drop_na(cluster_number,ResponseGroup_Triple) %>%
+  rename(Age=age)%>%
+  rename(Sex=sex)%>%
+  rename(CMV=MIA_CMV_Seropositivity)%>%
+  filter(CMV %!in% 3) %>%
+  mutate(Sex = recode(Sex,
+                      "1" = ": male",
+                      "2" = ": female")) %>%
+  mutate(CMV = recode(CMV,
+                      "1" = ": positive",
+                      "2" = ": negative"))
+
+contrasts(model_cimm$cluster_number) = contr.sum(9)
+
+logit_model <- clm(ResponseGroup_Triple ~ cluster_number, data = model_cimm)
+summary(logit_model)
+
+logit_model_preds <- tidy(logit_model, conf.int = TRUE, exponentiate = TRUE) %>%
+  dplyr::select(term,estimate, p.value, conf.low,conf.high) %>%
+  mutate(
+    estimate = round(estimate, 10),
+    # conf.low = round(conf.low, 2),
+    # conf.high = round(conf.high, 2)
+  ) %>%
+  filter(term %!in% c("1|2","2|3","3|4"))
+
+##### immunotype calculate for imm9 #####
+# Coefficients and variance for groups 1...8
+b <- coef(logit_model)
+ix <- startsWith(names(b), "cluster_number")
+b1.8 <- b[ix]
+b1.8.var <- diag(vcov(logit_model)[ix,ix])
+ 
+# Coefficients and variance for group 9
+b.lincomb <- matrix(rep(-1,sum(ix)),nrow=1)
+b9 <- b.lincomb %*% b1.8
+b9.var <- b.lincomb %*% vcov(logit_model)[ix,ix] %*% t(b.lincomb)
+ 
+# Combine
+params <- c(b1.8, cluster_number9=b9)
+params.sd <- sqrt(c(b1.8.var, cluster_number9=b9.var))
+
+imm9_estimate <- b9
+imm9_se <- b9.var^0.5
+t_value <- imm9_estimate / imm9_se
+p_value <- 2 * pt(-abs(t_value), df.residual(logit_model))
+
+imm9_df <- data.frame(term = "cluster_number9",
+                      estimate = exp(imm9_estimate),   # Exponentiate the estimate
+                      p.value = p_value,
+                      conf.low = exp(imm9_estimate - 1.96 * imm9_se),  # Exponentiate the lower bound of the CI
+                      conf.high = exp(imm9_estimate + 1.96 * imm9_se) # Exponentiate the upper bound of the CI
+)
+
+
+logit_plot <- rbind(logit_model_preds, imm9_df) %>%
+  arrange(-desc(term)) %>%
+  mutate(term = case_when(
+    grepl("cluster_number", term) ~ gsub("cluster_number", "Immunotype ", term),
+    TRUE ~ term
+  ))
+
+ggplot(logit_plot, aes(y = estimate, x = term)) +
+  geom_pointrange(aes(ymin = conf.low, ymax = conf.high, color = term),
+                  size = 0.5) +
+  geom_hline(yintercept = 1.0, linetype = "dotted", size = 1) +
+  scale_y_log10() +
+  scale_color_manual(values = cols_model) +
+  labs(y = "Odds ratio", x = "") +
+  coord_flip() +
+  theme_classic() +
+  theme(legend.position = "none")
+
+ggsave(file = paste0(models.dir, "sumcont_imm_HIq_trivac.pdf", sep=""), width =3.5 , height =3)
+
+ggplot(logit_plot, aes(y = estimate, x = term)) +
+  geom_hline(yintercept = 1.0, linetype = "dotted", size = 1) +
+  geom_pointrange(aes(ymin = conf.low, ymax = conf.high, color = term),
+                  size = 0.5) +
+  scale_y_log10() +
+  scale_color_manual(values = cols_model) +
+  labs(y = "Odds ratio", x = "") +
+  theme_classic() +
+  theme(legend.position = "none",   axis.text.x = element_text(angle = 45, vjust = 1, hjust=1))
+
+ggsave(file = paste0(models.dir, "sumcont_imm_HIq_trivac_flip.pdf", sep=""), width =3.7 , height =3)
+```
+
+# table 1 CMV and sex ratio in immunotypes and triple vaccine response quartiles
+```{r}
+table1a<-trivac_imm %>%
+  drop_na(cluster_number, ResponseGroup_Triple) %>%
+  group_by(cluster_number) %>%
+  summarise(
+    Total_Samples = n(),
+    Median_Age = median(age, na.rm = TRUE),
+    Min_Age = min(age, na.rm = TRUE),
+    Max_Age = max(age, na.rm = TRUE),
+    IQR_Age = IQR(age, na.rm = TRUE),
+    MIA_CMV_Seropositivity_Percentage = mean(MIA_CMV_Seropositivity == "1") * 100,
+    Male_Percentage = mean(sex == "1") * 100
+  ) %>%
+  mutate(
+    Age_Range = paste0(Median_Age, " (", Min_Age, "-", Max_Age, ")"),
+    MIA_CMV_Seropositivity_Percentage = round(MIA_CMV_Seropositivity_Percentage, 0),
+    Male_Percentage = round(Male_Percentage, 0)
+  ) %>%
+  select(-Median_Age, -Min_Age, -Max_Age)
+
+write_xlsx(table1a, "table1a.xlsx")
+
+table1b<-trivac_imm %>%
+  drop_na(cluster_number, ResponseGroup_Triple) %>%
+  group_by(ResponseGroup_Triple) %>%
+  summarise(
+    Total_Samples = n(),
+    Median_Age = median(age, na.rm = TRUE),
+    IQR_Age = IQR(age, na.rm = TRUE),
+    Min_Age = min(age, na.rm = TRUE),
+    Max_Age = max(age, na.rm = TRUE),
+    MIA_CMV_Seropositivity_Percentage = mean(MIA_CMV_Seropositivity == "1") * 100,
+    Male_Percentage = mean(sex == "1") * 100
+  ) %>%
+  mutate(
+    Age_Range = paste0(Median_Age, " (", Min_Age, "-", Max_Age, ")"),
+    MIA_CMV_Seropositivity_Percentage = round(MIA_CMV_Seropositivity_Percentage, 0),
+    Male_Percentage = round(Male_Percentage, 0)
+  ) %>%
+  select(-Median_Age, -Min_Age, -Max_Age)
+
+write_xlsx(table1b, "table1b.xlsx")
+
+table1c<-trivac_imm %>%
+  drop_na(cluster_number, ResponseGroup_Triple) %>%
+  # group_by(cluster_number) %>%
+  summarise(
+    Total_Samples = n(),
+    Median_Age = median(age, na.rm = TRUE),
+    IQR_Age = IQR(age, na.rm = TRUE),
+    Min_Age = min(age, na.rm = TRUE),
+    Max_Age = max(age, na.rm = TRUE),
+    MIA_CMV_Seropositivity_Percentage = mean(MIA_CMV_Seropositivity == "1") * 100,
+    Male_Percentage = mean(sex == "1") * 100
+  ) %>%
+  mutate(
+    Age_Range = paste0(Median_Age, " (", Min_Age, "-", Max_Age, ")"),
+    MIA_CMV_Seropositivity_Percentage = round(MIA_CMV_Seropositivity_Percentage, 0),
+    Male_Percentage = round(Male_Percentage, 0)
+  ) %>%
+  select(-Median_Age, -Min_Age, -Max_Age)
+
+write_xlsx(table1c, "table1c.xlsx")
+
+table1a
+table1b
+table1c
+```
+
+# Immune entropy VITAL
+## immune entropy calculation for all VITAL participants
+```{r eval=FALSE, include=FALSE}
+# for all
+IDs_trivac_entropy_woCMV3 <- truc_influ_d0 %>%
+  left_join(immunotype) %>%
+  left_join(chronic_viral_inf) %>%
+  select(subject_identifier) %>%
+  pull()
+
+entropy_scores <- truc_influ_d0 %>%
+  drop_na() %>%
+  filter(subject_identifier %in% IDs_trivac_entropy_woCMV3) %>%
+  select(subject_identifier)
+
+# immune_cols are the variables I want to use in the analysis
+immune_cols <- truc_influ_d0 %>%
+  filter(subject_identifier %in% IDs_trivac_entropy_woCMV3) %>%
+  dplyr::select(granulocytes_perWBC,lymphocytes_perWBC,`CD3+_perWBC`,`CD4+_perWBC`,`CD4_Tcm_perWBC`,`CD4_Tem_perWBC`,`CD4_Teff_perWBC`,`CD4_TrueNaive_perWBC`,`CD4_Tscm_perWBC`,`CD4_Treg_perWBC`,`CD4_Treg_Tcm_perWBC`,`CD4_Treg_Tem_perWBC`,`CD4_Treg_Tn_perWBC`,`CD4_Treg_CD38+_perWBC`,`CD4_Treg_HLADR+_perWBC`,`CD4_Treg_CD95+_perWBC`,`CD4_CD38+_perWBC`,`CD4_CD38+HLADR+_perWBC`,`CD4_HLADR+_perWBC`,`CD4_CD95+_perWBC`,`CD4_CXCR5+_perWBC`,`CD4_CXCR5+CD38+_perWBC`,`CD4_CXCR5+CD38-HLADR-_perWBC`,`CD4_CXCR5+CD95+_perWBC`,`CD4_CXCR5+_Tcm_perWBC`,`CD4_CXCR5+_Tem_perWBC`,`CD4_CXCR5+_Tn_perWBC`,`CD8+_perWBC`,`CD8_Tcm_perWBC`,`CD8_Tem_perWBC`,`CD8_Teff_perWBC`,`CD8_TrueNaive_perWBC`,`CD8_Tscm_perWBC`,`CD8_CD38+_perWBC`,`CD8_CD38+HLADR+_perWBC`,`CD8_HLADR+_perWBC`,`CD8_CD95+_perWBC`,`CD8_CXCR5+_perWBC`,`CD8_CXCR5+CD95+_perWBC`,`CD8_CXCR5+_Tcm_perWBC`,`CD8_CXCR5+_Tem_perWBC`,`CD8_CXCR5+_Tn_perWBC`,`CD8_CXCR5+_Teff_perWBC`,`CD3-_perWBC`,`CD56bright_perWBC`,`CD56bright_CD38+_perWBC`,`CD56dim_perWBC`,`CD56dim_CD38+_perWBC`,`CD56neg_perWBC`,`CD56neg_HLADR+_perWBC`,`CD19+_perWBC`,`B_DN_memory_IgD-CD27-_perWBC`,`B_memory_IgD+CD27+_perWBC`,`B_naive_IgD+CD27-_perWBC`,`B_switched_memory_IgD-CD27+_perWBC`,`monocytes_perWBC`,`monocytes_classical_perWBC`,`monocytes_intermediate_perWBC`,`monocytes_nonclassical_perWBC`) %>%
+  colnames()
+
+# per iteration calculating ref groups
+# First, calculate the median for each immune parameter in the reference group
+reference_median <- truc_influ_d0 %>%
+  left_join(immunotype, by="subject_identifier") %>%
+  filter(subject_identifier %in% readRDS("ref_group_IDs.RDS")) %>%
+  summarise(across(all_of(immune_cols), median))
+
+# Transpose this single-row dataframe to a named vector
+reference_vector <- t(reference_median)
+
+# Then, calculate the correlation-based distance for each individual
+entropy_scores$entropy_cor_T0T5num_med <- truc_influ_d0 %>%
+  filter(subject_identifier %in% IDs_trivac_entropy_woCMV3) %>%
+  rowwise() %>%
+  mutate(distance = 1 - cor(c_across(all_of(immune_cols)), reference_vector, method = "spearman")) %>%
+  ungroup() %>%
+  pull(distance)
+
+entropy_scores %>% saveRDS("immune_entropy_all_VITAL.RDS")
+```
+# Immune entropy RECOVAC
+```{r eval=FALSE, include=FALSE}
+truc_influ_d0_editKTP <- truc_influ_d0 %>%
+    dplyr::select(subject_identifier,contains("_perWBC"))
+
+
+truc_influ_d0_editKTP <- truc_influ_d0_editKTP %>%
+  dplyr::select(subject_identifier,all_of(immune_cols_KTP))
+
+IDs_trivac_entropy_woCMV3 <- trivac_resp_quartiles %>%
+  left_join(immunotype) %>%
+  left_join(chronic_viral_inf) %>%
+  drop_na(ResponseGroup_Triple,cluster_number) %>%
+  select(subject_identifier) %>%
+  pull()
+
+reference_median <- truc_influ_d0_editKTP %>% 
+  left_join(immunotype, by="subject_identifier") %>%
+  filter(subject_identifier %in% IDs_trivac_entropy_woCMV3) %>%
+  left_join(vital_subject)%>%
+  drop_na(cluster_number) %>%
+  filter(age<35)%>%
+  summarise(across(all_of(immune_cols_KTP), median))
+
+# Transpose this single-row dataframe to a named vector
+reference_vector <- t(reference_median)
+
+
+entropy_scores <- KTP_FACS %>%
+  drop_na() %>%
+  select(subject_identifier)
+
+entropy_scores$immune_entropy <- KTP_FACS %>%
+  rowwise() %>%
+  mutate(distance = 1 - cor(c_across(all_of(immune_cols_KTP)), reference_vector, method = "spearman")) %>%
+  ungroup() %>%
+  pull(distance) 
+
+saveRDS(entropy_scores, "immune_entropy_KTP.rds" )
+entropy_scores %>% write_xlsx("immune_entropy_KTP.xlsx")
+
+```
+
+# Immune entropy ISA
+```{r eval=FALSE, include=FALSE}
+immune_cols_Leon <- colnames(FACSdata_ofWBC[-1])
+
+truc_influ_d0_editLeon <- truc_influ_d0 %>%
+    dplyr::select(subject_identifier,contains("_perWBC"))
+truc_influ_d0_editLeon$monocytes_int_nonclass_perWBC <- truc_influ_d0_editLeon$monocytes_intermediate_perWBC+truc_influ_d0_editLeon$monocytes_nonclassical_perWBC
+
+truc_influ_d0_editLeon <- truc_influ_d0_editLeon %>%
+  dplyr::select(subject_identifier,all_of(immune_cols_Leon))
+
+IDs_trivac_entropy_woCMV3 <- trivac_resp_quartiles %>%
+  left_join(immunotype) %>%
+  left_join(chronic_viral_inf) %>%
+  drop_na(ResponseGroup_Triple,cluster_number) %>%
+  filter(MIA_CMV_Seropositivity %!in% 3) %>%
+  select(subject_identifier) %>%
+  pull()
+
+reference_median <- truc_influ_d0_editLeon %>% 
+  left_join(immunotype, by="subject_identifier") %>%
+  filter(subject_identifier %in% IDs_trivac_entropy_woCMV3) %>%
+  left_join(vital_subject)%>%
+  drop_na(cluster_number) %>%
+  filter(age<35)%>%
+  summarise(across(all_of(immune_cols_Leon), median))
+
+# Transpose this single-row dataframe to a named vector
+reference_vector <- t(reference_median)
+
+entropy_scores <- FACSdata_ofWBC %>%
+  drop_na() %>%
+  select(oprnr)
+
+entropy_scores$entropy_leon <- FACSdata_ofWBC %>%
+  rowwise() %>%
+  mutate(distance = 1 - cor(c_across(all_of(immune_cols_Leon)), reference_vector, method = "spearman")) %>%
+  ungroup() %>%
+  pull(distance) 
+
+# saveRDS(entropy_scores, "immune_entropy_ISA.rds" )
+```
+
+# plot immune entropy, age, sex , CMV, immunotype, triple vaccine response groups
+```{r}
+entropy_scores_plot <- trivac_imm %>%
+  left_join(entropy_scores) %>%
+  drop_na(cluster_number,entropy_cor_T0T5num_med,ResponseGroup_Triple)%>%
+  droplevels() %>%
+  mutate(sex = recode(sex, "1" = "Male", "2" = "Female"),
+         `CMV Seropositivity` = recode(MIA_CMV_Seropositivity, "1" = "CMV positive", "2" = "CMV negative"))%>%
+  mutate(sex = factor(sex, levels = c("Female", "Male")),
+         `CMV Seropositivity` = factor(`CMV Seropositivity`, levels = c("CMV positive", "CMV negative")))%>%
+  mutate(ResponseGroup_Triple = recode(ResponseGroup_Triple,
+                             "1" = "TQ1",
+                             "2" = "TQ2",
+                             "3" = "TQ3",
+                             "4" = "TQ4")) %>%
+  droplevels()
+wilcox.test(entropy_scores_plot$entropy_cor_T0T5num_med ~ entropy_scores_plot$sex)
+wilcox.test(entropy_scores_plot$entropy_cor_T0T5num_med ~ entropy_scores_plot$MIA_CMV_Seropositivity)
+
+n1 <- ggscatter(entropy_scores_plot, 
+          x = "age", 
+          y = "entropy_cor_T0T5num_med",
+          alpha = 0.1,
+          add = "reg.line",  # Add regression line
+          conf.int = TRUE)+ # Add confidence interval
+  stat_cor(show.legend = FALSE,
+           method = "spearman",
+           p.accuracy = 0.000000000001,
+           r.accuracy = 0.01)+
+  xlab("Age (years)")+
+  ylab("Immune entropy (1-r)")
+
+n2<- ggplot(entropy_scores_plot)+
+  geom_point( 
+    aes(x = sex,y = entropy_cor_T0T5num_med, group = sex, color=sex),
+    position = position_jitter(width = 0.1,seed =42),  
+    size = 1.5,
+    alpha = .5, 
+    show.legend = FALSE
+    )+
+  geom_half_violin(
+    aes(x = sex,y = entropy_cor_T0T5num_med, group = sex, fill=sex),
+    alpha = .5, 
+    side = "r",
+    position = position_nudge(0.13), 
+  )+
+  geom_half_boxplot(
+    aes(x = sex,y = entropy_cor_T0T5num_med, group = sex, fill=sex),
+    alpha = .5, 
+    side = "l", 
+    outlier.shape = NA,
+    center = FALSE,
+    errorbar.draw = FALSE, 
+    width = .4,
+    position = position_nudge(-0.13), 
+  )+
+  scale_fill_manual(values=c("#009E73","#E69F00"))+
+  scale_color_manual(values=c("#009E73","#E69F00"))+
+  theme_classic()+
+  stat_summary(aes(y=entropy_cor_T0T5num_med, x=sex),size=0.2,
+               position = position_nudge(-0.23))+
+  theme(legend.position = "none")+
+  ylab("Immune entropy (1-r)")+
+  xlab("")
+
+df_plot <- entropy_scores_plot %>%
+  drop_na(MIA_CMV_Seropositivity) %>%
+  droplevels()
+
+wilcox.test(entropy_scores_plot$entropy_cor_T0T5num_med ~ entropy_scores_plot$MIA_CMV_Seropositivity)
+
+n3<-ggplot(df_plot)+
+  geom_point( 
+    aes(x = `CMV Seropositivity`,y = entropy_cor_T0T5num_med, group = `CMV Seropositivity`, color=`CMV Seropositivity`),
+    position = position_jitter(width = 0.1,seed =42),  
+    size = 1.5,
+    alpha = .5, 
+    show.legend = FALSE
+    )+
+  geom_half_violin(
+    aes(x = `CMV Seropositivity`,y = entropy_cor_T0T5num_med, group = `CMV Seropositivity`, fill=`CMV Seropositivity`),
+    alpha = .5, 
+    side = "r",
+    position = position_nudge(0.13), 
+  )+
+  geom_half_boxplot(
+    aes(x = `CMV Seropositivity`,y = entropy_cor_T0T5num_med, group = `CMV Seropositivity`, fill=`CMV Seropositivity`),
+    alpha = .5, 
+    side = "l", 
+    outlier.shape = NA,
+    center = FALSE,
+    errorbar.draw = FALSE, 
+    width = .4,
+    position = position_nudge(-0.13), 
+  )+
+  theme_classic()+
+  scale_fill_manual(values=c("#D55E00","#56B4E9"))+
+  scale_color_manual(values=c("#D55E00","#56B4E9"))+
+  stat_summary(aes(y=entropy_cor_T0T5num_med, x=`CMV Seropositivity`),size=0.2,
+               position = position_nudge(-0.23))+
+  theme(legend.position = "none")+
+  ylab("Immune entropy (1-r)")+
+  xlab("")
+
+
+df_plot <- entropy_scores_plot %>%
+  drop_na(cluster_number)
+n4 <- ggplot(df_plot, aes(x=cluster_number, y=entropy_cor_T0T5num_med)) +
+    geom_jitter(aes(fill=cluster_number,color=cluster_number), alpha=0.7, width = 0.3,size=1.5) +
+    geom_boxplot(aes(fill=cluster_number), alpha=0.9,outlier.size=0,outlier.colour="white") +
+    scale_fill_manual("Immunotypes", values=cols_cluster) +
+    scale_color_manual("Immunotypes", values=cols_cluster) +
+    theme_classic()+xlab("Immunotypes")+
+    stat_summary(aes(y=entropy_cor_T0T5num_med, x=cluster_number),size=0.2)+
+  theme(legend.position = "none")+
+  ylab("Immune entropy (1-r)")
+
+wilcox.test(entropy_scores_plot$entropy_cor_T0T5num_med ~ entropy_scores_plot$sex)
+
+n5 <- ggplot(entropy_scores_plot)+
+  geom_point( 
+    aes(x = ResponseGroup_Triple,y = entropy_cor_T0T5num_med, group = ResponseGroup_Triple, color=ResponseGroup_Triple),
+    position = position_jitter(width = 0.1,seed =42),  
+    size = 1.5,
+    alpha = .5, 
+    show.legend = FALSE
+    )+
+  geom_half_violin(
+    aes(x = ResponseGroup_Triple,y = entropy_cor_T0T5num_med, group = ResponseGroup_Triple, fill=ResponseGroup_Triple),
+    alpha = .5, 
+    side = "r",
+    position = position_nudge(0.13), 
+  )+
+  geom_half_boxplot(
+    aes(x = ResponseGroup_Triple,y = entropy_cor_T0T5num_med, group = ResponseGroup_Triple, fill=ResponseGroup_Triple),
+    alpha = .5, 
+    side = "l", 
+    outlier.shape = NA,
+    center = FALSE,
+    errorbar.draw = FALSE, 
+    width = .4,
+    position = position_nudge(-0.13), 
+  )+
+  theme_classic()+
+  stat_summary(aes(y=entropy_cor_T0T5num_med, x=ResponseGroup_Triple),size=0.2,
+               position = position_nudge(-0.23))+
+  theme(legend.position = "none")+
+  scale_fill_manual(values=c("brown1","darkgoldenrod1","deepskyblue2","blue"))+
+  scale_color_manual(values=c("brown1","darkgoldenrod1","deepskyblue2","blue"))+
+  ylab("Immune entropy (1-r)")+
+  xlab("Triple vaccine response group")
+
+n5 <- ggplot(df_plot, aes(x=ResponseGroup_Triple, y=entropy_cor_T0T5num_med)) +
+  geom_jitter(aes(fill=ResponseGroup_Triple, color=ResponseGroup_Triple), alpha=0.5, width = 0.3,size=1.5) +
+  geom_boxplot(aes(fill=ResponseGroup_Triple), alpha=0.5,outlier.size=0,outlier.colour="white") +
+  scale_fill_manual(values=c("brown1","darkgoldenrod1","deepskyblue2","blue"))+
+  scale_color_manual(values=c("brown1","darkgoldenrod1","deepskyblue2","blue"))+    
+  theme_classic()+
+  xlab("Triple vaccine response group")+
+  stat_summary(aes(y=entropy_cor_T0T5num_med, x=ResponseGroup_Triple),size=0.2)+
+  theme(legend.position = "none")+
+  ylab("Immune entropy (1-r)")
+
+n6 <- ggplot(entropy_scores_plot)+
+  geom_point( 
+    aes(x = sex,y = age, group = sex, color=sex),
+    position = position_jitter(width = 0.1,seed =42),  
+    size = 1.5,
+    alpha = .5, 
+    show.legend = FALSE
+    )+
+  geom_half_violin(
+    aes(x = sex,y = age, group = sex, fill=sex),
+    alpha = .5, 
+    side = "r",
+    position = position_nudge(0.13), 
+  )+
+  geom_half_boxplot(
+    aes(x = sex,y = age, group = sex, fill=sex),
+    alpha = .5, 
+    side = "l", 
+    outlier.shape = NA,
+    center = FALSE,
+    errorbar.draw = FALSE, 
+    width = .4,
+    position = position_nudge(-0.13), 
+  )+
+  scale_fill_manual(values=c("#009E73","#E69F00"))+
+  scale_color_manual(values=c("#009E73","#E69F00"))+
+  theme_classic()+
+  stat_summary(aes(y=age, x=sex),size=0.2,
+               position = position_nudge(-0.23))+
+  theme(legend.position = "none")+
+  ylab("Age (years)")+xlab("")+facet_wrap(~`CMV Seropositivity`)
+
+n7 <- ggplot(entropy_scores_plot)+
+  geom_point( 
+    aes(x = `CMV Seropositivity`,y = age, group = `CMV Seropositivity`, color=`CMV Seropositivity`),
+    position = position_jitter(width = 0.1,seed =42),  
+    size = 1.5,
+    alpha = .5, 
+    show.legend = FALSE
+    )+
+  geom_half_violin(
+    aes(x = `CMV Seropositivity`,y = age, group = `CMV Seropositivity`, fill=`CMV Seropositivity`),
+    alpha = .5, 
+    side = "r",
+    position = position_nudge(0.13), 
+  )+
+  geom_half_boxplot(
+    aes(x = `CMV Seropositivity`,y = age, group = `CMV Seropositivity`, fill=`CMV Seropositivity`),
+    alpha = .5, 
+    side = "l", 
+    outlier.shape = NA,
+    center = FALSE,
+    errorbar.draw = FALSE, 
+    width = .4,
+    position = position_nudge(-0.13), 
+  )+
+  scale_fill_manual(values=c("#D55E00","#56B4E9"))+
+  scale_color_manual(values=c("#D55E00","#56B4E9"))+
+  theme_classic()+
+  stat_summary(aes(y=age, x=`CMV Seropositivity`),size=0.2,
+               position = position_nudge(-0.23))+
+  theme(legend.position = "none")+
+  ylab("Age (years)")+xlab("")
+
+n8 <- ggplot(entropy_scores_plot)+
+  geom_point( 
+    aes(x = sex,y = age, group = sex, color=sex),
+    position = position_jitter(width = 0.1,seed =42),  
+    size = 1.5,
+    alpha = .5, 
+    show.legend = FALSE
+    )+
+  geom_half_violin(
+    aes(x = sex,y = age, group = sex, fill=sex),
+    alpha = .5, 
+    side = "r",
+    position = position_nudge(0.13), 
+  )+
+  geom_half_boxplot(
+    aes(x = sex,y = age, group = sex, fill=sex),
+    alpha = .5, 
+    side = "l", 
+    outlier.shape = NA,
+    center = FALSE,
+    errorbar.draw = FALSE, 
+    width = .4,
+    position = position_nudge(-0.13), 
+  )+
+  scale_fill_manual(values=c("#009E73","#E69F00"))+
+  scale_color_manual(values=c("#009E73","#E69F00"))+
+  theme_classic()+
+  stat_summary(aes(y=age, x=sex),size=0.2,
+               position = position_nudge(-0.23))+
+  theme(legend.position = "none")+
+  ylab("Age (years)")+xlab("")
+
+wilcox.test(entropy_scores_plot$age ~ entropy_scores_plot$MIA_CMV_Seropositivity)
+wilcox.test(entropy_scores_plot$age ~ entropy_scores_plot$sex)
+entropy_scores_plot %>% select(sex,MIA_CMV_Seropositivity) %>% 
+  table()
+```
+
+# Statistical test, immune entropy and immunotype
+```{r}
+df_stat <- entropy_scores_plot %>%
+  select(cluster_number,entropy_cor_T0T5num_med) %>%
+  drop_na(cluster_number)
+
+## melt
+df_stat_melt <- df_stat %>% 
+  reshape2::melt(.)
+
+### kruskal.test and Dunn's test
+## With kruskal.test we identify overall which subsets are significant and then Dunn's test tells us which are different between pairs of clusters
+kw.test.all <- df_stat_melt %>% 
+  group_by(variable) %>% 
+  kruskal_test(value ~ cluster_number) %>% 
+  adjust_pvalue(method = "BH") 
+kw.test.all.eff.size <- df_stat_melt %>% 
+  group_by(variable) %>% 
+  kruskal_effsize(value ~ cluster_number) 
+combine.kw <- kw.test.all %>% 
+  left_join(kw.test.all.eff.size, by="variable") %>% 
+  filter(p.adj < 0.05)
+
+## Number of variables with p.adj-value <0.05
+length(combine.kw$variable)
+
+## table summarizing effect size of the significant variables 
+table(combine.kw$magnitude)
+
+### Post-hoc analysis dunn's test, pairwise multiple comparisons to check which are significant in pairwise analysis.
+dunn_entropy_immunotype <- df_stat_melt %>% 
+  group_by(variable) %>% 
+  dunn_test(value ~ cluster_number, p.adjust.method = "BH", detailed = TRUE)%>% 
+  filter(p.adj.signif != "ns")
+
+dunn_entropy_immunotype %>%
+  select(variable, group1, group2, p.adj, p.adj.signif) %>% 
+  write_xlsx("supptable2.xlsx")
+```
+
+# Statistical test, immune entropy and triple vaccine response group
+```{r}
+df_stat <- entropy_scores_plot %>%
+  select(ResponseGroup_Triple,entropy_cor_T0T5num_med) %>%
+  drop_na(ResponseGroup_Triple,entropy_cor_T0T5num_med)
+
+## melt
+df_stat_melt <- df_stat %>% 
+  reshape2::melt(.)
+
+### kruskal.test and Dunn's test
+## With kruskal.test we identify overall which subsets are significant and then Dunn's test tells us which are different between pairs of clusters
+kw.test.all <- df_stat_melt %>% 
+  group_by(variable) %>% 
+  kruskal_test(value ~ ResponseGroup_Triple) %>% 
+  adjust_pvalue(method = "BH") 
+kw.test.all.eff.size <- df_stat_melt %>% 
+  group_by(variable) %>% 
+  kruskal_effsize(value ~ ResponseGroup_Triple) 
+combine.kw <- kw.test.all %>% 
+  left_join(kw.test.all.eff.size, by="variable") %>% 
+  filter(p.adj < 0.05)
+
+## Number of variables with p.adj-value <0.05
+length(combine.kw$variable)
+
+## table summarizing effect size of the significant variables 
+table(combine.kw$magnitude)
+
+### Post-hoc analysis dunn's test, pairwise multiple comparisons to check which are significant in pairwise analysis.
+dunn_entropy_triplevaccineresponse <- df_stat_melt %>% 
+  group_by(variable) %>% 
+  dunn_test(value ~ ResponseGroup_Triple, p.adjust.method = "BH", detailed = TRUE)%>% 
+  filter(p.adj.signif != "ns")
+dunn_entropy_triplevaccineresponse
+
+dunn_entropy_triplevaccineresponse %>%
+  select(variable, group1, group2, p.adj, p.adj.signif)
+```
+# Models: Vaccine response group ~  immune entropy (with or without age)
+## triple vaccine response
+```{r}
+model_cimm <-trivac_imm %>%
+  left_join(entropy_scores) %>%
+  drop_na(cluster_number,ResponseGroup_Triple) %>%
+  rename(`Immunotype `=cluster_number)%>%
+  rename(Age=age)%>%
+  rename(`Immune entropy`=entropy_cor_T0T5num_med)%>%
+  rename(Sex=sex)%>%
+  rename(CMV=MIA_CMV_Seropositivity)%>%
+  mutate(Sex = recode(Sex,
+                      "1" = ": male",
+                      "2" = ": female")) %>%
+  mutate(CMV = recode(CMV,
+                      "1" = ": positive",
+                      "2" = ": negative")) %>%
+  droplevels()
+
+model_cimm$Sex <- factor(model_cimm$Sex, levels = c(": female",": male"))
+model_cimm$CMV <- factor(model_cimm$CMV, levels = c(": negative",": positive"))
+
+contrasts(model_cimm$`Immunotype `) = contr.sum(9)
+contrasts(model_cimm$age_group) = contr.sum(3)
+
+# model_cimm$`Immune entropy`<-log10(model_cimm$`Immune entropy`)
+
+logit_model <- clm(ResponseGroup_Triple ~ `Immune entropy` , data = model_cimm)
+summary(logit_model)
+
+logit_model_preds1 <- tidy(logit_model, conf.int = TRUE, exponentiate = TRUE) %>%
+  select(term,estimate, p.value, conf.low,conf.high) %>%
+  # mutate(
+  #   estimate = round(estimate, 10),
+  #   conf.low = round(conf.low, 2),
+  #   conf.high = round(conf.high, 2)
+  # ) %>%
+  filter(term %!in% c("1|2","2|3","3|4"))%>%
+  arrange(desc(estimate)) %>%
+  mutate(model="m1")
+
+logit_model <- clm(ResponseGroup_Triple ~ `Immune entropy`+Sex+Age+CMV , data = model_cimm)
+summary(logit_model)
+
+logit_model_preds2 <- tidy(logit_model, conf.int = TRUE, exponentiate = TRUE) %>%
+  select(term,estimate, p.value, conf.low,conf.high) %>%
+  # mutate(
+  #   estimate = round(estimate, 10),
+  #   conf.low = round(conf.low, 2),
+  #   conf.high = round(conf.high, 2)
+  # ) %>%
+  filter(term %!in% c("1|2","2|3","3|4"))%>%
+  arrange(desc(estimate)) %>%
+  mutate(model="m2")
+
+logit_model <- clm(ResponseGroup_Triple ~ Age, data = model_cimm)
+summary(logit_model)
+
+
+logit_model_preds3 <- tidy(logit_model, conf.int = TRUE, exponentiate = TRUE) %>%
+  select(term,estimate, p.value, conf.low,conf.high) %>%
+  # mutate(
+  #   estimate = round(estimate, 10),
+  #   conf.low = round(conf.low, 2),
+  #   conf.high = round(conf.high, 2)
+  # ) %>%
+  filter(term %!in% c("1|2","2|3","3|4"))%>%
+  arrange(desc(estimate)) %>%
+  mutate(model="m3")
+
+##### save plots
+logit_model_preds<-rbind(logit_model_preds1,logit_model_preds2)
+
+m1 <- ggplot(logit_model_preds, aes(y = estimate, x = term,shape=model,color=model)) +
+  geom_hline(yintercept = 1.0, linetype = "dotted", size = 1) +
+  geom_pointrange(aes(ymin = conf.low, ymax = conf.high),
+                  size = 0.75,position = position_dodge(width = 0.3)) +
+  scale_y_log10() +
+  labs(y = "Odds ratio", x = "") +
+  # coord_flip() +
+  theme_classic()+  
+  theme(legend.position = "none")+
+  scale_color_manual(values=c("#BB5566","#004488"))+
+  ylab("Odds Ratio for triple vaccine response")
+
+m1
+ggsave(file = paste0(models.dir, "entropy_trivac_m1-2.pdf", sep=""), width =4 , height =3)
+
+
+#### sex #####
+logit_model <- clm(ResponseGroup_Triple ~ Sex , data = model_cimm)
+summary(logit_model)
+#### CMV #####
+logit_model <- clm(ResponseGroup_Triple ~ CMV , data = model_cimm)
+summary(logit_model)
+```
+## QIV
+```{r}
+model_cimm <-Flu_HI_maxRBA %>%
+  left_join(entropy_scores) %>%
+  left_join(vital_subject) %>%
+  left_join(chronic_viral_inf) %>%
+  drop_na(Flu_HI_Q_maxRBA,entropy_cor_T0T5num_med) %>%
+  rename(Age=age)%>%
+  rename(`Immune entropy`=entropy_cor_T0T5num_med)%>%
+  rename(Sex=sex)%>%
+  rename(CMV=MIA_CMV_Seropositivity)%>%
+  # filter(CMV %!in% 3) %>%
+  mutate(Sex = recode(Sex,
+                      "1" = ": male",
+                      "2" = ": female")) %>%
+  mutate(CMV = recode(CMV,
+                      "1" = ": positive",
+                      "2" = ": negative")) %>%
+  droplevels()
+
+model_cimm$Sex <- factor(model_cimm$Sex, levels = c(": female",": male"))
+model_cimm$CMV <- factor(model_cimm$CMV, levels = c(": negative",": positive"))
+
+# model_cimm$`Immune entropy`<-log10(model_cimm$`Immune entropy`)
+
+logit_model <- clm(Flu_HI_Q_maxRBA ~ `Immune entropy` , data = model_cimm)
+summary(logit_model)
+
+logit_model_preds <- tidy(logit_model, conf.int = TRUE, exponentiate = TRUE) %>%
+  select(term,estimate, p.value, conf.low,conf.high) %>%
+  # mutate(
+  #   estimate = round(estimate, 10),
+  #   conf.low = round(conf.low, 2),
+  #   conf.high = round(conf.high, 2)
+  # ) %>%
+  filter(term %!in% c("1|2","2|3","3|4"))%>%
+  arrange(desc(estimate)) 
+logit_model_preds
+```
+## PCV13
+```{r}
+model_cimm <-PCV13_IgG_MaxRBA %>%
+  left_join(entropy_scores) %>%
+  left_join(vital_subject) %>%
+  left_join(chronic_viral_inf) %>%
+  drop_na(PCV13_IgG_Q_maxRBA,entropy_cor_T0T5num_med) %>%
+  rename(Age=age)%>%
+  rename(`Immune entropy`=entropy_cor_T0T5num_med)%>%
+  rename(Sex=sex)%>%
+  rename(CMV=MIA_CMV_Seropositivity)%>%
+  # filter(CMV %!in% 3) %>%
+  mutate(Sex = recode(Sex,
+                      "1" = ": male",
+                      "2" = ": female")) %>%
+  mutate(CMV = recode(CMV,
+                      "1" = ": positive",
+                      "2" = ": negative")) %>%
+  droplevels()
+
+model_cimm$Sex <- factor(model_cimm$Sex, levels = c(": female",": male"))
+model_cimm$CMV <- factor(model_cimm$CMV, levels = c(": negative",": positive"))
+
+# model_cimm$`Immune entropy`<-log10(model_cimm$`Immune entropy`)
+
+logit_model <- clm(PCV13_IgG_Q_maxRBA ~ `Immune entropy` , data = model_cimm)
+summary(logit_model)
+
+logit_model_preds <- tidy(logit_model, conf.int = TRUE, exponentiate = TRUE) %>%
+  select(term,estimate, p.value, conf.low,conf.high) %>%
+  # mutate(
+  #   estimate = round(estimate, 10),
+  #   conf.low = round(conf.low, 2),
+  #   conf.high = round(conf.high, 2)
+  # ) %>%
+  filter(term %!in% c("1|2","2|3","3|4"))%>%
+  arrange(desc(estimate)) 
+logit_model_preds
+```
+## mRNA-1273
+```{r}
+model_cimm <-mRNA1273_IgG_Q4 %>%
+  left_join(entropy_scores) %>%
+  left_join(vital_subject) %>%
+  left_join(chronic_viral_inf) %>%
+  drop_na(mRNA1273_Q_d28,entropy_cor_T0T5num_med) %>%
+  rename(Age=age)%>%
+  rename(`Immune entropy`=entropy_cor_T0T5num_med)%>%
+  rename(Sex=sex)%>%
+  rename(CMV=MIA_CMV_Seropositivity)%>%
+  # filter(CMV %!in% 3) %>%
+  mutate(Sex = recode(Sex,
+                      "1" = ": male",
+                      "2" = ": female")) %>%
+  mutate(CMV = recode(CMV,
+                      "1" = ": positive",
+                      "2" = ": negative")) %>%
+  droplevels()
+
+model_cimm$Sex <- factor(model_cimm$Sex, levels = c(": female",": male"))
+model_cimm$CMV <- factor(model_cimm$CMV, levels = c(": negative",": positive"))
+
+# model_cimm$`Immune entropy`<-log10(model_cimm$`Immune entropy`)
+
+logit_model <- clm(mRNA1273_Q_d28 ~ `Immune entropy` , data = model_cimm)
+summary(logit_model)
+
+logit_model_preds <- tidy(logit_model, conf.int = TRUE, exponentiate = TRUE) %>%
+  select(term,estimate, p.value, conf.low,conf.high) %>%
+  # mutate(
+  #   estimate = round(estimate, 10),
+  #   conf.low = round(conf.low, 2),
+  #   conf.high = round(conf.high, 2)
+  # ) %>%
+  filter(term %!in% c("1|2","2|3","3|4"))%>%
+  arrange(desc(estimate)) 
+logit_model_preds
+```
+
+# Models: immune entropy ~ age, sex, CMV
+```{r}
+model <- lm(`Immune entropy` ~ Age + Sex + CMV , data = model_cimm)
+summary(model)
+```
+
+# Correlation between cytokines and immune entropy
+```{r}
+# take log of cytokines for spearman correlation
+cytokine_log <- cytokine
+cytokine_log[,-1]<-log10(cytokine[,-1])
+
+cor_df2<-entropy_scores %>%
+  rename(immune_entropy=entropy_cor_T0T5num_med)%>%
+  mutate(immune_entropy=log10(immune_entropy))%>%
+  full_join(cytokine) %>%
+  drop_na(immune_entropy) %>%
+  filter(subject_identifier %in% model_cimm[[1]]) %>%
+  column_to_rownames(var="subject_identifier") %>%
+  rename(IL_1RA=`IL-1RA`) %>%
+  rename(YKL_40	=`YKL-40`) %>%
+  rename(IL_6 = `IL-6`)
+
+results <- data.frame(variable = colnames(cor_df2)[-1],
+                      spearman = NA,
+                      p_value = NA)
+
+for (i in 2:ncol(cor_df2)) {
+  test <- cor.test(cor_df2[[1]], cor_df2[[i]], method = "spearman")
+  results$spearman[i-1] <- test$estimate
+  results$p_value[i-1] <- test$p.value
+}
+
+results %>%   
+  rename(p=p_value) %>%
+  adjust_pvalue(method = "BH") %>%
+  arrange(-desc(abs(p.adj)))
+
+results %>%   
+  rename(p=p_value) %>%
+  adjust_pvalue(method = "BH") %>%
+  arrange(desc(abs(spearman))) %>% 
+  filter(p.adj<=0.05)
+```
+
+## correlation plots
+```{r}
+cor_df3<-entropy_scores %>%
+  rename(immune_entropy=entropy_cor_T0T5num_med)%>%
+  full_join(cytokine) %>%
+  drop_na(immune_entropy) %>%
+  filter(subject_identifier %in% model_cimm[[1]]) %>%
+  column_to_rownames(var="subject_identifier") %>%
+  rename(IL_1RA=`IL-1RA`) %>%
+  rename(YKL_40	=`YKL-40`) %>%
+  rename(IL_6 = `IL-6`)
+
+
+g1<-ggscatter(cor_df3, 
+                     x = "immune_entropy", 
+                     y = "YKL_40",
+                     alpha = 0.2,
+                     add = "reg.line",  # Add regression line
+                     conf.int = TRUE,
+              add.params = list(color = "grey20", fill = "lightblue"), # Customize reg. line
+              )+ stat_cor(
+             show.legend = FALSE,
+             method = "spearman",
+             p.accuracy = 0.00000001,
+             r.accuracy = 0.01)+
+  theme(legend.position = "none")+
+  xlab("immune entropy (1-r)")+
+  ylab("YKL-40 (ng/mL)")+
+  scale_y_log10()+
+  scale_x_log10()
+
+g4<-ggscatter(cor_df3, 
+                     x = "immune_entropy", 
+                     y = "CRP",
+                     alpha = 0.2,
+                     add = "reg.line",  # Add regression line
+                     conf.int = TRUE,
+              add.params = list(color = "grey20", fill = "lightblue"), # Customize reg. line
+              )+ # Add confidence interval)+ # Add confidence interval
+        stat_cor(
+             show.legend = FALSE,
+             method = "spearman",
+             p.accuracy = 0.00000001,
+             r.accuracy = 0.01)+
+  theme(legend.position = "none")+
+  xlab("immune entropy (1-r)")+
+  ylab("CRP (mg/mL)")+
+  scale_y_log10()+
+  scale_x_log10()
+
+g3<-ggscatter(cor_df3, 
+                     x = "immune_entropy", 
+                     y = "IL_1RA",
+                     alpha = 0.2,
+                     add = "reg.line",  # Add regression line
+                     conf.int = TRUE,
+              add.params = list(color = "grey20", fill = "lightblue"), # Customize reg. line
+              )+ # Add confidence interval)+ # Add confidence interval
+        stat_cor(
+             show.legend = FALSE,
+             method = "spearman",
+             p.accuracy = 0.00000001,
+             r.accuracy = 0.01)+
+  theme(legend.position = "none")+
+  xlab("immune entropy (1-r)")+
+  ylab("IL-1RA (npg/mL)")+
+  scale_y_log10()+
+  scale_x_log10()
+
+g2<-ggscatter(cor_df3, 
+                     x = "immune_entropy", 
+                     y = "CXCL10",
+                     alpha = 0.2,
+                     add = "reg.line",  # Add regression line
+                     conf.int = TRUE,
+                 add.params = list(color = "grey20", fill = "lightblue"), # Customize reg. line
+              )+ # Add confidence interval
+        stat_cor(
+             show.legend = FALSE,
+             method = "spearman",
+             p.accuracy = 0.00000001,
+             r.accuracy = 0.01)+
+  theme(legend.position = "none")+
+  xlab("immune entropy (1-r)")+
+  ylab("CXCL10 (pg/mL)")+
+  scale_y_log10()+
+  scale_x_log10()
+
+g6<-ggscatter(cor_df3, 
+                     x = "immune_entropy", 
+                     y = "IL_6",
+                     alpha = 0.2,
+                     add = "reg.line",  # Add regression line
+                     conf.int = TRUE,
+                 add.params = list(color = "grey20", fill = "lightblue"), # Customize reg. line
+              )+ # Add confidence interval
+        stat_cor(
+             show.legend = FALSE,
+             method = "spearman",
+             p.accuracy = 0.00000001,
+             r.accuracy = 0.01)+
+  theme(legend.position = "none")+
+  xlab("immune entropy (1-r)")+
+  ylab("IL-6 (pg/mL)")+
+  scale_y_log10()+
+  scale_x_log10()
+
+
+g7<-ggscatter(cor_df3, 
+                     x = "immune_entropy", 
+                     y = "Neopterin",
+                     alpha = 0.2,
+                     add = "reg.line",  # Add regression line
+                     conf.int = TRUE,
+                 add.params = list(color = "grey20", fill = "lightblue"), # Customize reg. line
+              )+ # Add confidence interval
+        stat_cor(
+             show.legend = FALSE,
+             method = "spearman",
+             p.accuracy = 0.00000001,
+             r.accuracy = 0.01)+
+  theme(legend.position = "none")+
+  xlab("immune entropy (1-r)")+
+  ylab("Neopterin (nMol/L)")+
+  scale_y_log10()+
+  scale_x_log10()
+
+g5<-ggscatter(cor_df3, 
+                     x = "immune_entropy", 
+                     y = "IFNg",
+                     alpha = 0.2,
+                     add = "reg.line",  # Add regression line
+                     conf.int = TRUE,
+                 add.params = list(color = "grey20", fill = "lightblue"), # Customize reg. line
+              )+ # Add confidence interval
+        stat_cor(
+             show.legend = FALSE,
+             method = "spearman",
+             p.accuracy = 0.00000001,
+             r.accuracy = 0.01)+
+  theme(legend.position = "none")+
+  xlab("immune entropy (1-r)")+
+  ylab("IFNg (pg/mL)")+
+  scale_y_log10()+
+  scale_x_log10()
+
+
+g8<-ggscatter(cor_df3, 
+                     x = "immune_entropy", 
+                     y = "CD163",
+                     alpha = 0.2,
+                     add = "reg.line",  # Add regression line
+                     conf.int = TRUE,
+                 add.params = list(color = "grey20", fill = "lightblue"), # Customize reg. line
+              )+ # Add confidence interval
+        stat_cor(
+             show.legend = FALSE,
+             method = "spearman",
+             p.accuracy = 0.00000001,
+             r.accuracy = 0.01)+
+  theme(legend.position = "none")+
+  xlab("immune entropy (1-r)")+
+  ylab("CD163 (ng/mL)") +
+  scale_y_log10()+
+  scale_x_log10()
+
+g8
+
+```
+
+## linear regression 
+```{r}
+df_lm <- entropy_scores %>%
+  rename(immune_entropy=entropy_cor_T0T5num_med)%>%
+  mutate(immune_entropy=log10(immune_entropy))%>%
+  full_join(cytokine_log) %>%
+  drop_na(immune_entropy) %>%
+  rename(IL_1RA=`IL-1RA`) %>%
+  rename(YKL_40	=`YKL-40`) %>%
+  rename(IL_6 = `IL-6`) %>%
+  left_join(vital_subject)%>%
+  left_join(chronic_viral_inf) %>%
+  filter(subject_identifier %in% model_cimm[[1]]) 
+
+names(df_lm)
+
+lm(immune_entropy ~ YKL_40 +age+sex+MIA_CMV_Seropositivity, data = df_lm) %>% summary() 
+lm(immune_entropy ~ CRP +age+sex+MIA_CMV_Seropositivity, data = df_lm) %>% summary() 
+lm(immune_entropy ~ IL_1RA +age+sex+MIA_CMV_Seropositivity, data = df_lm) %>% summary() 
+lm(immune_entropy ~ CXCL10 +age+sex+MIA_CMV_Seropositivity, data = df_lm) %>% summary() 
+lm(immune_entropy ~ IL_6 +age+sex+MIA_CMV_Seropositivity, data = df_lm) %>% summary() 
+lm(immune_entropy ~ Neopterin +age+sex+MIA_CMV_Seropositivity, data = df_lm) %>% summary() 
+lm(immune_entropy ~ GP130 +age+sex+MIA_CMV_Seropositivity, data = df_lm) %>% summary() 
+lm(immune_entropy ~ IFNg +age+sex+MIA_CMV_Seropositivity, data = df_lm) %>% summary() 
+lm(immune_entropy ~ TNFa +age+sex+MIA_CMV_Seropositivity, data = df_lm) %>% summary() 
+lm(immune_entropy ~ CD14 +age+sex+MIA_CMV_Seropositivity, data = df_lm) %>% summary() 
+lm(immune_entropy ~ Calprotectin +age+sex+MIA_CMV_Seropositivity, data = df_lm) %>% summary() 
+lm(immune_entropy ~ `IL-8` +age+sex+MIA_CMV_Seropositivity, data = df_lm) %>% summary() 
+lm(immune_entropy ~ Elastase +age+sex+MIA_CMV_Seropositivity, data = df_lm) %>% summary() 
+lm(immune_entropy ~ PR3 +age+sex+MIA_CMV_Seropositivity, data = df_lm) %>% summary() 
+lm(immune_entropy ~ SAA +age+sex+MIA_CMV_Seropositivity, data = df_lm) %>% summary() 
+lm(immune_entropy ~ `Angpt-2` +age+sex+MIA_CMV_Seropositivity, data = df_lm) %>% summary() 
+lm(immune_entropy ~ C5a +age+sex+MIA_CMV_Seropositivity, data = df_lm) %>% summary() 
+lm(immune_entropy ~ CCL2 +age+sex+MIA_CMV_Seropositivity, data = df_lm) %>% summary() 
+lm(immune_entropy ~ CD25 +age+sex+MIA_CMV_Seropositivity, data = df_lm) %>% summary() 
+lm(immune_entropy ~ CD163 +age+sex+MIA_CMV_Seropositivity, data = df_lm) %>% summary() 
+lm(immune_entropy ~ `IL-6R` +age+sex+MIA_CMV_Seropositivity, data = df_lm) %>% summary() 
+lm(immune_entropy ~ `PTX-3` +age+sex+MIA_CMV_Seropositivity, data = df_lm) %>% summary() 
+lm(immune_entropy ~ `Cathepsin G` +age+sex+MIA_CMV_Seropositivity, data = df_lm) %>% summary() 
+lm(immune_entropy ~ `A1AT/elastase` +age+sex+MIA_CMV_Seropositivity, data = df_lm) %>% summary() 
+lm(immune_entropy ~ iFABP2 +age+sex+MIA_CMV_Seropositivity, data = df_lm) %>% summary() 
+lm(immune_entropy ~ `GM-CSF` +age+sex+MIA_CMV_Seropositivity, data = df_lm) %>% summary() 
+lm(immune_entropy ~ `IL-1b` +age+sex+MIA_CMV_Seropositivity, data = df_lm) %>% summary() 
+lm(immune_entropy ~ `IL-10` +age+sex+MIA_CMV_Seropositivity, data = df_lm) %>% summary() 
+lm(immune_entropy ~ IFNa +age+sex+MIA_CMV_Seropositivity, data = df_lm) %>% summary() 
+
+```
+
+# save Figure 2
+```{r}
+ggarrange(n1,n2,n3,n5,n4,m1,nrow=2,ncol=3)
+ggsave(file = paste0(models.dir, "Fig2_1.pdf", sep=""), width =9 , height =6)
+
+
+ggarrange(g1,g2,g3,g4,g5,g6,g7,g8, nrow =2,ncol=4) 
+ggsave(file = paste0(cytokine.dir, "Fig2_2.pdf", sep=""), width =12 , height =6)
+
+
+ggarrange(n8,n7,n6, widths = c(1.4, 1.4,2),nrow = 1,ncol=3) 
+ggsave(file = paste0(models.dir, "SuppFig2.pdf", sep=""), width =10 , height =3)
+
+```
+
+# Immune entropy VITAL vs RECOVAC
+```{r}
+# add age and cohort groups
+entropy_scores_VITAL <- entropy_scores_VITAL %>% left_join(vital_subject[,c(1,3)]) %>%
+  rename(immune_entropy=entropy_cor_T0T5num_med) %>%
+  mutate(group="VITAL")
+entropy_scores_RECOVAC <- entropy_scores_RECOVAC %>% left_join(KTP_age)%>%
+  mutate(group="RECOVAC") %>%
+  select(subject_identifier, immune_entropy, age, group)
+
+
+Ent_all <- rbind(entropy_scores_RECOVAC,entropy_scores_VITAL) %>%
+    mutate_at(c("group"), list(~as.factor(.)))
+
+wilcox.test(Ent_all$immune_entropy ~ Ent_all$group)
+
+
+summary(entropy_scores_RECOVAC$age)
+```
+## plot age matched entropy for VITAL and RECOVAC
+```{r}
+Ent_all <- entropy_scores_VITAL %>%
+  filter(subject_identifier %in% mRNA1273_IgG_Q4[[1]]) %>%
+  rbind(entropy_scores_RECOVAC)
+
+
+b1 <- Ent_all %>% 
+ggplot(aes(y = immune_entropy, x=age, color = group)) +
+  geom_point(aes(y = immune_entropy,x=age, color = group),alpha = 0.5, size=1.5)+
+  theme_classic() +
+  scale_color_manual(values=c("blue","orange")) +
+  xlab( "Age (years)")+
+  ylab("Immune entropy (1-r)")+
+  theme(legend.position = "none")
+b1
+ggsave(file = paste0(models.dir, "entropy_VITAL_RECOVAC_dot.pdf", sep=""), width =4 , height =3)
+
+b2 <- Ent_all %>% 
+  mutate(group = recode(group,
+                             "VITAL" = "VITAL (mRNA1273)")) %>%
+  ggplot()+
+  geom_point( 
+    aes(x = group,y = immune_entropy, group = group, color=group),
+    position = position_jitter(width = 0.1,seed =42),  
+    size = 1.5,
+    alpha = .2, 
+    show.legend = FALSE
+    )+
+  geom_half_violin(
+    aes(x = group,y = immune_entropy, group = group, fill=group),
+    alpha = .5, 
+    side = "r",
+    position = position_nudge(0.13), 
+  )+
+  geom_half_boxplot(
+    aes(x = group,y = immune_entropy, group = group, fill=group),
+    alpha = .5, 
+    side = "l", 
+    outlier.shape = NA,
+    center = FALSE,
+    errorbar.draw = FALSE, 
+    width = .4,
+    position = position_nudge(-0.13), 
+  )+
+  scale_color_manual(values=c("blue","orange")) +
+  scale_fill_manual(values=c("blue","orange")) +
+  theme_classic()+
+  stat_summary(aes(y=immune_entropy, x=group),size=0.2,
+               position = position_nudge(-0.23))+
+  theme(legend.position = "none")+
+  ylab("Immune entropy (1-r)") +xlab("")
+
+b2
+ggsave(file = paste0(models.dir, "entropy_VITAL_RECOVAC_violin.pdf", sep=""), width =4 , height =3)
+
+ggarrange(b1,b2, ncol = 2)
+ggsave(file = paste0(models.dir, "Fig3_1.pdf", sep=""), width =6 , height =3)
+
+```
+
+# VITAL moderna ~ immune entropy
+```{r}
+model_df <- mRNA1273_ab %>%
+  left_join(entropy_scores) %>%
+  rename(immune_entropy = entropy_cor_T0T5num_med) %>%
+  drop_na(immune_entropy,MIA_CoV19_S1_BAU_Titer_Tc) 
+
+model_df$S1_Tc_log10 <- log10(model_df$MIA_CoV19_S1_BAU_Titer_Tc)
+
+# Using the function to fit models and retrieve AIC, BIC, and gam.check() results for k from 5 to 15
+fit_and_compare_gams(data = model_df, 
+                                     response = "S1_Tc_log10", 
+                                     predictor = "immune_entropy", 
+                                     k_start = 3, 
+                                     k_end = 30)
+
+
+gam_moderna_T2 <-gam(S1_Tc_log10 ~ s(immune_entropy, k=3), data = model_df)
+summary(gam_moderna_T2)
+gam.check(gam_moderna_T2)
+plot(gam_moderna_T2,residuals=TRUE, pch=1)
+plot(gam_moderna_T2,residuals=FALSE, pch=1)
+
+
+pdf(file = paste0(models.dir, "GAM_Moderna_gg2.pdf", sep=""), width =5 , height =3)
+ggplot(model_df, aes(x = immune_entropy, y = S1_Tc_log10)) +
+  geom_smooth(method = "gam", formula = y ~ s(x, k = 3), se = TRUE) +
+  theme_classic()+
+  scale_x_continuous(breaks=seq(0,0.4,0.05))+
+  annotation_logticks(sides = "l")+  
+  scale_y_continuous(breaks=seq(1,4,0.1))+
+  labs(y="S1 titers (log IgG)", x="immune entropy (1-r)", title = "mRNA-1273 VITAL Generalized Additive Model")
+dev.off()
+```
+
+
+# ISA validation ~ immune entropy
+## ISA T1 and T2
+```{r}
+# ISA T1
+# Using the function to fit models and retrieve AIC, BIC, and gam.check() 
+fit_and_compare_gams(data = Leon_pfizer_entropy, 
+                                     response = "MIA_T1_log10", 
+                                     predictor = "immune_entropy", 
+                                     k_start = 3, 
+                                     k_end = 30)
+
+gam_L1<-gam(MIA_T1_log10 ~ s(immune_entropy,k=6), data = Leon_pfizer_entropy)
+gam.check(gam_L1)
+summary(gam_L1)
+plot(gam_L1, residuals=FALSE, pch=1)
+
+# ISA T2
+# Using the function to fit models and retrieve AIC, BIC, and gam.check() 
+fit_and_compare_gams(data = Leon_pfizer_entropy, 
+                                     response = "MIA_T2_log10", 
+                                     predictor = "immune_entropy", 
+                                     k_start = 3, 
+                                     k_end = 30)
+
+gam_L2<-gam(MIA_T2_log10 ~ s(immune_entropy,k=6), data = Leon_pfizer_entropy)
+gam.check(gam_L2)
+summary(gam_L2)
+plot(gam_L2, residuals=FALSE, pch=1)
+```
+## VITAL T1 and T2
+```{r}
+# VITAL T1
+# Using the function to fit models and retrieve AIC, BIC, and gam.check() 
+fit_and_compare_gams(data = VITAL_pfizer_entropy, 
+                                     response = "MIA_T1_log10", 
+                                     predictor = "immune_entropy", 
+                                     k_start = 3, 
+                                     k_end = 30)
+
+gam_V1<-gam(MIA_T1_log10 ~ s(immune_entropy,k=6), data = VITAL_pfizer_entropy)
+gam.check(gam_V1)
+summary(gam_V1)
+plot(gam_V1, residuals=FALSE, pch=1)
+
+# VITAL T2
+# Using the function to fit models and retrieve AIC, BIC, and gam.check() 
+fit_and_compare_gams(data = VITAL_pfizer_entropy, 
+                                     response = "MIA_T2_log10", 
+                                     predictor = "immune_entropy", 
+                                     k_start = 3, 
+                                     k_end = 30)
+
+gam_V2<-gam(MIA_T2_log10 ~ s(immune_entropy,k=4), data = VITAL_pfizer_entropy)
+gam.check(gam_V2)
+summary(gam_V2)
+plot(gam_V2, residuals=TRUE, pch=1)
+```
+## Merged T1 and T2
+```{r}
+# VITAL T1
+# Using the function to fit models and retrieve AIC, BIC, and gam.check()
+fit_and_compare_gams(data = MIA_entropy_merged, 
+                                     response = "MIA_T1_log10", 
+                                     predictor = "immune_entropy", 
+                                     k_start = 3, 
+                                     k_end = 30)
+
+gam_M1<-gam(MIA_T1_log10 ~ s(immune_entropy,k=5), data = MIA_entropy_merged)
+gam.check(gam_M1)
+summary(gam_M1)
+plot(gam_M1, residuals=FALSE, pch=1)
+
+# VITAL T2
+# Using the function to fit models and retrieve AIC, BIC, and gam.check()
+fit_and_compare_gams(data = MIA_entropy_merged, 
+                                     response = "MIA_T2_log10", 
+                                     predictor = "immune_entropy", 
+                                     k_start = 3, 
+                                     k_end = 30)
+
+gam_M2<-gam(MIA_T2_log10 ~ s(immune_entropy,k=4), data = MIA_entropy_merged)
+gam.check(gam_M2)
+summary(gam_M2)
+plot(gam_M2, residuals=TRUE, pch=1)
+```
+
+## save plots 
+### ISA
+```{r}
+# T1
+pdf(file = paste0(models.dir, "GAM_L1_gg.pdf", sep=""), width =5 , height =3)
+ggplot(Leon_pfizer_entropy, aes(x = immune_entropy, y = MIA_T1_log10)) +
+  geom_smooth(method = "gam", formula = y ~ s(x, k = 6), se = TRUE) +
+  theme_classic()+
+  scale_x_continuous(breaks=seq(0,0.4,0.05))+
+  scale_y_continuous(breaks=seq(0,5,1))+
+  annotation_logticks(sides = "l")+
+  labs(y="S1 titers (log IgG)", x="immune entropy (1-r)", title = "ISA cohort first dose BNT162b2")
+
+dev.off()
+
+# T2
+pdf(file = paste0(models.dir, "GAM_L2_gg.pdf", sep=""), width =5 , height =3)
+ggplot(Leon_pfizer_entropy, aes(x = immune_entropy, y = MIA_T2_log10)) +
+  geom_smooth(method = "gam", formula = y ~ s(x, k = 6), se = TRUE) +
+  theme_classic()+
+  scale_x_continuous(breaks=seq(0,0.4,0.05))+
+  scale_y_continuous(breaks=seq(0,5,1))+
+  annotation_logticks(sides = "l")+
+  labs(y="S1 titers (log IgG)", x="immune entropy (1-r)", title = "ISA cohort second dose BNT162b2")
+dev.off()
+```
+### VITAL
+```{r}
+# T1
+pdf(file = paste0(models.dir, "GAM_V1_gg.pdf", sep=""), width =5 , height =3)
+ggplot(VITAL_pfizer_entropy, aes(x = immune_entropy, y = MIA_T1_log10)) +
+  geom_smooth(method = "gam", formula = y ~ s(x, k = 6), se = TRUE) +
+  theme_classic()+
+  scale_x_continuous(breaks=seq(0,0.4,0.05))+
+  labs(y="S1 titers (log IgG)", x="immune entropy (1-r)", title = "VITAL cohort first dose BNT162b2")+
+  annotation_logticks(sides = "l")+
+
+dev.off()
+
+# T2
+
+pdf(file = paste0(models.dir, "GAM_V2_gg.pdf", sep=""), width =5 , height =3)
+ggplot(VITAL_pfizer_entropy, aes(x = immune_entropy, y = MIA_T2_log10)) +
+  geom_smooth(method = "gam", formula = y ~ s(x, k = 4), se = TRUE) +
+  theme_classic()+
+  scale_x_continuous(breaks=seq(0,0.4,0.05))+
+  labs(y="S1 titers (log IgG)", x="immune entropy (1-r)", title = "VITAL cohort second dose BNT162b2")+
+  annotation_logticks(sides = "l")+
+dev.off()
+```
+
+## Merged
+```{r}
+pdf(file = paste0(models.dir, "GAM_M1_gg.pdf", sep=""), width =5 , height =3)
+ggplot(MIA_entropy_merged, aes(x = immune_entropy, y = MIA_T1_log10)) +
+  geom_smooth(method = "gam", formula = y ~ s(x, k = 5), se = TRUE) +
+  theme_classic()+
+  scale_x_continuous(breaks=seq(0,0.4,0.05))+
+  labs(y="S1 titers (log IgG)", x="immune entropy (1-r)", title = "VITAL&ISA cohort first dose BNT162b2")+
+  annotation_logticks(sides = "l")
+dev.off()
+
+pdf(file = paste0(models.dir, "GAM_M2_gg.pdf", sep=""), width =5 , height =3)
+ggplot(MIA_entropy_merged, aes(x = immune_entropy, y = MIA_T2_log10)) +
+  geom_smooth(method = "gam", formula = y ~ s(x, k = 4), se = TRUE) +
+  theme_classic()+
+  scale_x_continuous(breaks=seq(0,0.4,0.05))+
+  labs(y="S1 titers (log IgG)", x="immune entropy (1-r)", title = "VITAL&ISA cohort second dose BNT162b2")+
+  annotation_logticks(sides = "l")
+dev.off()
+```
+
+# ISA and VITAL comparison age
+```{r}
+VITAL_age_entropy <- VITAL_pfizer_entropy %>% 
+  left_join(vital_subject) %>%
+  mutate(group="VITAL (BNT162b2)") %>%
+  select(subject_identifier,age,immune_entropy,group)
+  
+ISA_age_entropy <- ISA_subject %>%
+  rename(subject_identifier = oprnr,
+         age=age_on_vac1)%>%
+  left_join(Leon_pfizer_entropy) %>%
+  drop_na(MIA_T1,MIA_T2,immune_entropy)%>%
+  mutate(group="Validation (BNT162b2)") %>%
+  select(subject_identifier,age,immune_entropy,group)
+
+VITAL_ISA_age_entropy <- rbind(VITAL_age_entropy,ISA_age_entropy)
+
+
+ISA_age_entropy %>%
+  ggplot(aes(y = immune_entropy, x=age, color = group)) +
+  geom_point(aes(y = immune_entropy,x=age, color = group),alpha = 0.5, size=1.5)+
+  theme_classic() +
+  scale_color_manual(values=c("purple","orange")) +
+  xlab( "Age (years)")+
+  ylab("Immune entropy (1-r)")+
+  theme(legend.position = "none")
+
+VITAL_ISA_age_entropy %>%
+  ggplot(aes(y = immune_entropy, x=age, color = group)) +
+  geom_point(aes(y = immune_entropy,x=age, color = group),alpha = 0.5, size=1.5)+
+  theme_classic() +
+  scale_color_manual(values=c("purple","orange")) +
+  xlab( "Age (years)")+
+  ylab("Immune entropy (1-r)")+
+  theme(legend.position = "none")
+```
+
+# Supplementary Table ISA BNT162b2 and RECOVAC
+```{r}
+## RECOVAC
+supp_table1<-KTP_age %>%
+  left_join(entropy_scores_RECOVAC) %>%
+  drop_na(immune_entropy) %>%
+  select(age,Sex,CMV_seropositivity)
+
+supp_table1%>% 
+  tbl_summary(by = c(Sex))
+
+## ISA
+supp_table2<-ISA_subject %>%
+  left_join(FACSdata_ofWBC) %>%
+  rename(subject_identifier=oprnr) %>%
+  left_join(Leon_pfizer_entropy, by="subject_identifier") %>%
+  filter(subject_identifier %in% Leon_pfizer_entropy[[1]]) %>%
+  unique() %>%
+  select(age_on_vac1,dn_geslacht,CMV_Seropositivity)
+
+supp_table2%>% 
+  tbl_summary(by = c(dn_geslacht))
+
+## BNT162b2
+supp_table3<-VITAL_pfizer_entropy %>%
+  left_join(vital_subject) %>%
+  left_join(chronic_viral_inf) %>%
+  select(age,sex,MIA_CMV_Seropositivity)
+
+supp_table3%>% 
+  tbl_summary(by = c(sex))
+```
+
+
+# ref group info
+```{r}
+ref_df <- trivac_imm %>% 
+  filter(subject_identifier %in% readRDS("ref_group_IDs.RDS"))
+
+
+tableX1<-ref_df %>%
+  drop_na(cluster_number, ResponseGroup_Triple) %>%
+  # group_by(cluster_number)%>%
+  summarise(
+    Total_Samples = n(),
+    Median_Age = median(age, na.rm = TRUE),
+    Min_Age = min(age, na.rm = TRUE),
+    Max_Age = max(age, na.rm = TRUE),
+    imm1_Percentage = mean(cluster_number == "1") * 100,
+    TQ1_Percentage = mean(ResponseGroup_Triple == "1") * 100,
+    TQ2_Percentage = mean(ResponseGroup_Triple == "2") * 100,
+    TQ3_Percentage = mean(ResponseGroup_Triple == "3") * 100,
+    TQ4_Percentage = mean(ResponseGroup_Triple == "4") * 100,
+    MIA_CMV_Seropositivity_Percentage = mean(MIA_CMV_Seropositivity == "1") * 100,
+    Male_Percentage = mean(sex == "1") * 100
+  ) %>%
+  mutate(
+    Age_Range = paste0(Median_Age, " (", Min_Age, "-", Max_Age, ")"),
+    MIA_CMV_Seropositivity_Percentage = round(MIA_CMV_Seropositivity_Percentage, 0),
+    Male_Percentage = round(Male_Percentage, 0)
+  ) %>%
+  select(-Median_Age, -Min_Age, -Max_Age)
+tableX1
+
+
+write_xlsx(tableX1, "tableX.xlsx")
+```
+

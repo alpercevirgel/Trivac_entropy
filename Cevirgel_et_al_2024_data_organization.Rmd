@@ -1,0 +1,548 @@
+---
+title: "Immune Entropy and Stability"
+author: "Alper"
+date: "2023-08-11"
+output: html_document
+---
+
+# library
+```{r}
+analysis.path <- getwd()
+source("codes/library_function.R") #load the libraries
+```
+
+# import subject data & exclusions based on inclusion and exclusion criteria
+## import T0 and T5 exclusions/inclusions
+```{r}
+df_temp <- read_excel("~/Documents/Alper RIVM/1_Complete_analysis_per_project/VITAL database/VITAL database Alper.xlsx", 
+    sheet = "T0_T5_trucount_inclusion", skip = 1) %>%
+  mutate_at(c("subject_identifier"), list(~as.numeric(.))) %>%
+  mutate_at(c("subject_identifier"), list(~as.character(.))) %>%
+  mutate_at(c("Option_T5_use_Alper","Option_T0_use_Alper"), list(~as.factor(.))) %>%
+  as.data.frame()
+
+T0_inclusion <- df_temp %>%
+  filter(Option_T0_use_Alper %in% "yes") %>%
+  dplyr::select(subject_identifier) %>%
+  pull()
+
+T5_inclusion <- df_temp %>%
+  filter(Option_T5_use_Alper %in% "yes") %>%
+  dplyr::select(subject_identifier) %>%
+  pull()
+
+T0T5_inclusion <- df_temp %>%
+  filter(Option_T0_use_Alper %in% "yes") %>%
+  filter(Option_T5_use_Alper %in% "yes") %>%
+  dplyr::select(subject_identifier) %>%
+  pull()
+```
+
+## import tri-vaccine response quartiles and exclusions/inclusions
+```{r}
+df_temp <- read_excel("~/Documents/Alper RIVM/1_Complete_analysis_per_project/VITAL database/VITAL database Alper.xlsx", 
+    sheet = "trivac_inclusion_response", skip = 1) %>%
+    mutate_at(c("subject_identifier"), list(~as.character(.))) %>%
+    mutate_at(c("ResponseGroup_Triple","ResponseGroup_Triple_Flu","ResponseGroup_Triple_Pneu","ResponseGroup_Triple_COVID"), list(~as.factor(.))) %>%
+  as.data.frame()
+
+trivac_all_df <- read_excel("~/Documents/Alper RIVM/1_Complete_analysis_per_project/VITAL database/VITAL database Alper.xlsx", 
+    sheet = "trivac_inclusion_response", skip = 1) %>%
+    mutate_at(c("subject_identifier"), list(~as.character(.))) %>%
+    mutate_at(c("ResponseGroup_Triple","ResponseGroup_Triple_Flu","ResponseGroup_Triple_Pneu","ResponseGroup_Triple_COVID"), list(~as.factor(.))) %>%
+  as.data.frame()
+  
+
+trivac_influ_inclusion <- df_temp %>%
+  filter(PP_Flu_manuscript %in% "Include") %>%
+  dplyr::select(subject_identifier) %>%
+  pull()
+
+trivac_pneum_inclusion <- df_temp %>%
+  filter(PP_Pneu_manuscript %in% "Include") %>%
+  dplyr::select(subject_identifier) %>%
+  pull()
+
+trivac_sarsc_inclusion <- df_temp %>%
+  filter(PP_COVIDmoderna_manuscript %in% "Include") %>%
+  dplyr::select(subject_identifier) %>%
+  pull()
+
+trivac_sarsc_inclusion_pfizer <- df_temp %>%
+  filter(PP_COVIDpfizer_manuscript %in% "Include") %>%
+  dplyr::select(subject_identifier) %>%
+  pull()
+
+```
+
+## Serum proteins
+```{r}
+cytokine <- read_excel("~/Documents/Alper RIVM/1_Complete_analysis_per_project/VITAL database/VITAL database Alper.xlsx", 
+    sheet = "cytokines_final", skip = 1, na="NA") %>%
+  mutate_at(c("subject_identifier"), list(~as.character(.))) %>%
+  filter(subject_identifier %in% T0_inclusion) %>%
+  as.data.frame() %>%
+  drop_na()
+```
+
+
+## age, sex, BMI
+```{r}
+## subset the age, age groups and sex data 
+vital_subject <- read_excel("/Users/alpercevirgel/Documents/Alper RIVM/1_Complete_analysis_per_project/VITAL database/VITAL database Alper.xlsx",
+                            sheet = "subject",
+                            skip = 1) %>% 
+  mutate_at(c("sex","Age_group_T0"), list(~factor(.))) %>%
+  mutate_at(c("subject_identifier"), list(~as.character(.))) %>%
+  dplyr::rename(age_group=Age_group_T0,
+                age=Age_T0,
+                BMI=BMI_T0) %>%
+  dplyr::select(subject_identifier,sex,age,BMI,age_group) %>%
+  as.data.frame()
+head(vital_subject) 
+
+#sex 1=male, 2=female
+```
+## chronic viral infections
+```{r}
+## add chronic herpes virus infection data, and create factors for CMV+/- & EBV+/- combinations
+chronic_viral_inf <- read_excel("/Users/alpercevirgel/Documents/Alper RIVM/1_Complete_analysis_per_project/VITAL database/VITAL database Alper.xlsx", 
+                                       sheet = "CMV_EBV_VZV",
+                                       skip = 1,na = "n/a") %>%
+  dplyr::select(subject_identifier,MIA_CMV_Titer,MIA_CMV_Seropositivity,MIA_EBV_Titer,MIA_EBV_Seropositivity,MIA_VZV_Titer,MIA_VZV_Seropositivity) %>%
+  mutate_at(c("subject_identifier"), list(~as.character(.))) %>%
+  mutate_at(c("MIA_CMV_Seropositivity","MIA_EBV_Seropositivity","MIA_VZV_Seropositivity"), list(~factor(.))) %>%
+  droplevels()
+
+head(chronic_viral_inf)
+```
+
+## immunotypes
+```{r}
+immunotype <- readRDS(
+  "/Users/alpercevirgel/Documents/Alper RIVM/4_Manuscripts/Chapter_1/R_analysis/vital.truc_influ_d0_cluster.rds") %>%
+  dplyr::select(subject_identifier,cluster_number)
+head(immunotype)
+```
+
+## immune stability
+```{r}
+immune_stability <- readRDS(
+  "/Users/alpercevirgel/Documents/Alper RIVM/2_R_Analysis/R_pipelines/VITAL_R_analysis/20220131_Stability/immune_stability_combined.RDS") 
+head(immune_stability)
+```
+
+# import antibody data for each vaccine
+## Influenza vaccination (QIV) HAI titers H3N2
+```{r}
+QIV_ab <- read_excel("~/Documents/Alper RIVM/1_Complete_analysis_per_project/VITAL database/VITAL database Alper.xlsx", 
+    sheet = "HI_influenza")%>%
+  as.data.frame() %>%
+  filter(subject_identifier %in% trivac_influ_inclusion)
+
+
+head(QIV_ab)
+
+library(titer)
+
+H3N2_preRBA <- QIV_ab %>%
+  dplyr::select(subject_identifier, strain,GMT_T0, GMT_T4) %>%
+  drop_na(GMT_T0,GMT_T4)
+names(H3N2_preRBA) <- c("SubjectID","Strain","Pre","Post")
+H3N2_preRBA$Strain <- "A_Kansas_H3N2"
+H3N2_preRBA
+
+H3N2_preRBA<- H3N2_preRBA %>% arrange(-desc(Pre))
+
+
+
+
+titer_list <- FormatTiters(H3N2_preRBA)
+
+# ## Basic plot without any fitted model
+# BubbleChart(titer_list)
+# ## Change layout to plot all in a single column
+# BubbleChart(titer_list, cols = 1)
+# ## Add a linear fit
+# BubbleChart(titer_list, fit = "lm")
+# ## Add an exponential fit
+# BubbleChart(titer_list, fit = "exp")
+
+endpoints <- Calculate_maxRBA(titer_list, method = "exp",discretize=c(0.5),responseLabels = paste0(c("bottom50","mod", "top50")))
+Q12_34 <- endpoints$maxRBA_d50 %>% as.data.frame() %>%
+  rownames_to_column(var="subject_identifier") %>%
+  rename("Q12_34"=".")
+
+endpoints <- Calculate_maxRBA(titer_list, method = "exp",discretize=c(0.25),responseLabels = paste0(c("1","mod", "4")))
+Q1_4 <- endpoints$maxRBA_d25 %>% as.data.frame() %>%
+  rownames_to_column(var="subject_identifier") %>%
+  rename("Q1_4"=".")
+
+Flu_HI_maxRBA <- Q12_34 %>% left_join(Q1_4) %>%
+  mutate(Q1_4 = case_when(
+    Q12_34 == "top50" & Q1_4 == "mod" ~ "3",
+    Q12_34 == "bottom50" & Q1_4 == "mod" ~ "2",
+    TRUE ~ Q1_4 # This line keeps the original value when none of the above conditions are met
+  )) %>% 
+  select(subject_identifier, Q1_4) %>%
+  rename(Flu_HI_Q_maxRBA = Q1_4) %>%
+  mutate_at(c("Flu_HI_Q_maxRBA"), list(~as.factor(.))) 
+
+
+Flu_HI_maxRBA %>% left_join(QIV_ab) %>%
+  ggplot(aes(y = GMT_T0, x=Flu_HI_Q_maxRBA, color = Flu_HI_Q_maxRBA)) +
+  geom_point(aes(y = GMT_T0,x=Flu_HI_Q_maxRBA, color = Flu_HI_Q_maxRBA),alpha = 0.5, size=0.75)+
+  geom_boxplot(aes(y = GMT_T0,x=Flu_HI_Q_maxRBA, color = Flu_HI_Q_maxRBA),alpha = 0.5, size=0.75)+
+  theme_classic()
+
+
+endpoints_QIV <- Calculate_maxRBA(titer_list, method = "exp")
+endpoints_QIV <- endpoints_QIV$maxRBA %>% as.data.frame() %>% rownames_to_column(var="subject_identifier")
+colnames(endpoints_QIV) <- c("subject_identifier","maxRBA_QIV")
+
+```
+
+
+## Pneumococcal vaccination (PCV13) diphtheria toxin antibodies
+```{r}
+PCV13_ab <- read_excel("~/Documents/Alper RIVM/1_Complete_analysis_per_project/VITAL database/VITAL database Alper.xlsx", 
+    sheet = "Ab_pneum", skip = 1)%>%
+  as.data.frame() %>%
+  filter(subject_identifier %in% trivac_pneum_inclusion) %>%
+  dplyr::select(-dplyr::contains(c("Seropositivity", "T6","T7","T9", "Positive")))
+
+PCV13_ab_long <- PCV13_ab %>%
+  filter(subject_identifier %in% trivac_pneum_inclusion) %>%
+  rename(SubjectID=subject_identifier)%>%
+  pivot_longer(
+  cols = -SubjectID, # Exclude SubjectID from the reshaping
+  names_to = c("Strain", ".value"), # The first capture group for Strain, second for Pre/Post
+  names_pattern = "Pneu_Strain_([A-Za-z0-9]+)_(T\\d+)", # General regex pattern
+  values_drop_na = TRUE # Optional: to drop any NAs that might arise
+) %>% 
+  rename(Pre=T5) %>%
+  rename(Post=T8) %>% 
+  drop_na() %>%
+  as.data.frame()
+
+
+titer_list <- FormatTiters(PCV13_ab_long)
+
+endpoints <- Calculate_maxRBA(titer_list, method = "exp",discretize=c(0.5),responseLabels = paste0(c("bottom50","mod", "top50")))
+Q12_34 <- endpoints$maxRBA_d50 %>% as.data.frame() %>%
+  rownames_to_column(var="subject_identifier") %>%
+  rename("Q12_34"=".")
+
+endpoints <- Calculate_maxRBA(titer_list, method = "exp",discretize=c(0.25),responseLabels = paste0(c("1","mod", "4")))
+Q1_4 <- endpoints$maxRBA_d25 %>% as.data.frame() %>%
+  rownames_to_column(var="subject_identifier") %>%
+  rename("Q1_4"=".")
+
+
+PCV13_IgG_MaxRBA <- Q12_34 %>% left_join(Q1_4) %>%
+  mutate(Q1_4 = case_when(
+    Q12_34 == "top50" & Q1_4 == "mod" ~ "3",
+    Q12_34 == "bottom50" & Q1_4 == "mod" ~ "2",
+    TRUE ~ Q1_4 # This line keeps the original value when none of the above conditions are met
+  )) %>% 
+  select(subject_identifier, Q1_4) %>%
+  rename(PCV13_IgG_Q_maxRBA = Q1_4) %>%
+  mutate_at(c("PCV13_IgG_Q_maxRBA"), list(~as.factor(.)))
+
+endpoints_PCV13 <- Calculate_maxRBA(titer_list, method = "exp")
+endpoints_PCV13 <- endpoints_PCV13$maxRBA %>% as.data.frame() %>% rownames_to_column(var="subject_identifier")
+colnames(endpoints_PCV13) <- c("subject_identifier","maxRBA_PCV13")
+
+```
+
+## SARS-CoV-2 vaccination (mRNA-1273) 
+```{r}
+mRNA1273_ab <- read_excel("~/Documents/Alper RIVM/1_Complete_analysis_per_project/VITAL database/VITAL database Alper.xlsx", 
+     sheet = "MIA_SARSCoV2", skip = 1) %>%
+    mutate_at(c("subject_identifier"), list(~as.character(.))) %>%
+  as.data.frame() %>%
+  filter(subject_identifier %in% trivac_sarsc_inclusion) %>%
+  drop_na(MIA_CoV19_S1_BAU_Titer_Tc)
+
+
+mRNA1273_ab
+
+# BAU_Titer_Pre = day 0 antibody titers
+# BAU_Titer_Tc = day 28 antibody titers
+# S1, N, RBD, different antigens measured.
+# S1 is generally used 
+
+library(Hmisc)
+mRNA1273_IgG_Q4 <- mRNA1273_ab
+mRNA1273_IgG_Q4$mRNA1273_Q_d28 <- cut2(mRNA1273_ab$MIA_CoV19_S1_BAU_Titer_Tc, g = 4)
+
+mRNA1273_IgG_Q4 <- mRNA1273_IgG_Q4 %>%
+    mutate(mRNA1273_Q_d28 = recode(mRNA1273_Q_d28,
+                             "[ 104, 1415)" = "1",
+                             "[1415, 2267)" = "2",
+                             "[2267, 3409)" = "3",
+                             "[3409,18230]" = "4")) %>%
+  select(subject_identifier,mRNA1273_Q_d28)
+
+```
+
+# Triple vaccine response quartile
+```{r}
+trivac_resp_quartiles <- df_temp %>%
+  full_join(Flu_HI_maxRBA) %>%
+  full_join(PCV13_IgG_MaxRBA) %>%
+  full_join(mRNA1273_IgG_Q4) %>%
+  select(subject_identifier,Flu_HI_Q_maxRBA,PCV13_IgG_Q_maxRBA,mRNA1273_Q_d28) %>%
+  drop_na()
+
+trivac_resp_quartiles$ResponseGroup_Triple = (as.numeric(trivac_resp_quartiles$Flu_HI_Q_maxRBA)+
+                                                as.numeric(trivac_resp_quartiles$PCV13_IgG_Q_maxRBA)+
+                                                as.numeric( trivac_resp_quartiles$mRNA1273_Q_d28))/3
+
+trivac_resp_quartiles$ResponseGroup_Triple <- round(trivac_resp_quartiles$ResponseGroup_Triple, digits = 0) %>% 
+  as.factor()
+```
+
+## merge vaccination data
+```{r}
+trivac_imm <- vital_subject %>%
+  full_join(chronic_viral_inf, by="subject_identifier")%>%
+  full_join(trivac_resp_quartiles, by="subject_identifier")%>%
+  full_join(QIV_ab, by="subject_identifier") %>%
+  full_join(PCV13_ab, by="subject_identifier") %>%
+  full_join(mRNA1273_ab, by="subject_identifier") %>%
+  full_join(immunotype, by="subject_identifier") %>%
+  drop_na(cluster_number,ResponseGroup_Triple) %>%
+  droplevels()
+
+head(trivac_imm)
+```
+
+# trucount data 
+## T0
+```{r}
+truc_influ <- read_excel("/Users/alpercevirgel/Documents/Alper RIVM/1_Complete_analysis_per_project/VITAL database/VITAL database Alper.xlsx",
+                               sheet = "trucount_influenza_vac",
+                               skip = 1) %>% 
+  mutate_at(c("sex","age_group","timepoint","timepoint_days"), list(~factor(.))) %>%
+  mutate_at(c("subject_identifier"), list(~as.character(.))) %>%
+  dplyr::select(-c(`B_naive_CD27-IgD+_num`,`B_naive_CD27-IgD+_per`)) %>% 
+  as.data.frame()
+
+influ_truc_additional <- read_excel("/Users/alpercevirgel/Documents/Alper RIVM/1_Complete_analysis_per_project/VITAL database/VITAL database Alper.xlsx",
+                                    sheet = "extented_influ_trucount_subsets",
+                                    skip = 1) %>%
+  dplyr::select(-c(timepoint, subject_identifier))%>%
+  mutate_at(c("sample_identifier"), list(~as.character(.))) %>%
+  dplyr::select(-c(CD4TnTm,CD8TnTm)) %>%
+  dplyr::select(-c(`CD8+_CD95+HLADR-_per`,`CD4_Tcm_CD95-HLADR+_per`,`CD8_Tem_CD95+HLADR+_per`,`CD56neg_CD95+HLADR+_per`, `CD56dim_CD95+HLADR+_per`,	`CD56bright_CD95-HLADR-_per`,	`CD19_CD95+HLADR+_per`,`CD19_CD95+HLADR-_per`,`CD8+_CD95+HLADR-_num`,`CD4_Tcm_CD95-HLADR+_num`,`CD8_Tem_CD95+HLADR+_num`,`CD56neg_CD95+HLADR+_num`, `CD56dim_CD95+HLADR+_num`,	`CD56bright_CD95-HLADR-_num`,`CD19_CD95+HLADR+_num`,	`CD19_CD95+HLADR-_num`))
+
+truc_influ_d0_additional <- truc_influ %>%
+  left_join(influ_truc_additional, by="sample_identifier") %>%
+  dplyr::select(-c(fcs_file,age_group,age,sex,timepoint_days,sample_identifier)) %>%
+  dplyr::select(-dplyr::contains(c("plasmablast_IgD"))) %>%
+  filter(timepoint %in% "A") 
+
+truc_influ_d0 <- truc_influ_d0_additional %>%
+  dplyr::select(-timepoint) %>%
+  as.data.frame() %>%
+  dplyr::select(-dplyr::contains(c("plasmablast_IgD"))) %>%
+  filter(subject_identifier %in% T0_inclusion) 
+```
+
+## calculate immune subset % of WBC all data
+```{r}
+truc_perofall <- truc_influ_d0 %>%
+    dplyr::select(subject_identifier,contains("_num"))
+
+truc_perofall$WBC <- truc_perofall$lymphocytes_num+truc_perofall$monocytes_num+truc_perofall$granulocytes_num
+
+truc_perofall[,-1] <- (truc_perofall[,-1] / truc_perofall[,131]) *100
+
+truc_perofall<- truc_perofall %>%
+  rename_with(~ gsub("_num", "_perWBC", .), everything())
+
+truc_influ_d0 <- truc_influ_d0 %>% 
+  left_join(truc_perofall)
+
+
+
+truc_influ_d0 %>% drop_na() %>% left_join(vital_subject) %>% select(age) 
+```
+
+# RECOVAC age and facs data
+```{r}
+KTP_FACS <- read_excel("RECOVAC_data.xls", sheet="facs") %>% 
+  as.data.frame() %>% 
+  drop_na()
+
+KTP_FACS[,-c(1:2)] <- (KTP_FACS[,-c(1:2)] / KTP_FACS[,2])*100
+KTP_FACS <- KTP_FACS %>% select(-WBC) %>% rename_with(~str_replace_all(.x, "num", "perWBC"))
+
+immune_cols_KTP <- colnames(KTP_FACS[-1])
+
+KTP_age <- read_excel("RECOVAC_data.xls", sheet="subject", na = "na") %>% 
+  as.data.frame() %>% 
+  rename(CMV_ELISPOT=CMV) %>%
+  mutate(CMV_seropositivity = if_else(CMV_ELISPOT > 20, "CMV_positive", "CMV_negative",NA))
+```
+# ISA validation cohort
+## FACS data 
+```{r}
+FACSdata <- read_excel("~/Documents/Alper RIVM/1_Complete_analysis_per_project/Leon_FACS/results/FACS_counts_P1P2.xlsx", 
+    sheet = "final_oftotal") %>%
+    mutate_at(c("oprnr"), list(~as.character(.))) %>%
+  as.data.frame() %>%
+  rename(monocytes_classical_p1_count=`monocytes_CD16-_p1_count`)%>%
+  rename(monocytes_int_nonclass_p1_count=`monocytes_CD16+_p1_count`)%>%
+  rename(CD56neg_p1_count=`CD56-_p1_count`) %>%
+  filter(oprnr %!in% c("521636","521976","507422","509393","527917","513927"))
+
+
+FACSdata$`CD4_CD38+_p1_count` <- FACSdata$`CD4_CD38+HLADR+_p1_count`+ FACSdata$`CD4_CD38+HLADR-_p1_count`
+FACSdata$`CD8_CD38+_p1_count` <- FACSdata$`CD8_CD38+HLADR+_p1_count`+ FACSdata$`CD8_CD38+HLADR-_p1_count`
+FACSdata$`CD4_HLADR+_p1_count` <- FACSdata$`CD4_CD38+HLADR+_p1_count`+ FACSdata$`CD4_CD38-HLADR+_p1_count`
+FACSdata$`CD8_HLADR+_p1_count` <- FACSdata$`CD8_CD38+HLADR+_p1_count`+ FACSdata$`CD8_CD38-HLADR+_p1_count`
+
+# The formula for absolute counts
+calculate_absolute_counts <- function(count, beads_count) {
+  (count * 48950) / (beads_count * 100)
+}
+
+# Create a new dataframe to store the results
+FACSdata_abs <- FACSdata
+
+# Apply the formula to all columns except the first two
+for (var in names(FACSdata_abs)[-c(1, 2)]) {
+  FACSdata_abs[[var]] <- calculate_absolute_counts(FACSdata_abs[[var]], FACSdata_abs$beads_p1_count)
+}
+
+
+# calculate per of WBCs
+FACSdata_ofWBC <- FACSdata_abs
+FACSdata_ofWBC[,-c(1:4)] <- (FACSdata_ofWBC[,-c(1:4)] / FACSdata_ofWBC[,4])*100
+FACSdata_ofWBC <- FACSdata_ofWBC %>%
+  dplyr::select(oprnr,
+                granulocytes_p1_count,
+                lymphocytes_p1_count,
+                `CD3+_p1_count`,
+                `CD4+_p2adj_count`,
+                `CD4_Tcm_p2adj_count`,
+                `CD4_Teff_p2adj_count`,
+                `CD4_Tem_p2adj_count`,                  
+                `CD4_Tn_p2adj_count`,
+                `CD4_Treg_p2adj_count`,                
+                `CD4_Treg_Tcm_p2adj_count`,
+                `CD4_Treg_Tem_p2adj_count`,
+                `CD4_Treg_Tn_p2adj_count`,
+                `CD4_CD38+_p1_count`,
+                `CD4_CD38+HLADR+_p1_count`,
+                `CD4_HLADR+_p1_count`,
+                `CD4_CXCR5+_p2adj_count`,
+                `CD4_CXCR5+_Tcm_p2adj_count`,
+                `CD4_CXCR5+_Tem_p2adj_count`,
+                `CD4_CXCR5+_Tn_p2adj_count`,
+                `CD8+_p2adj_count`,
+                `CD8_Tcm_p2adj_count`,
+                `CD8_Teff_p2adj_count`,
+                `CD8_Tem_p2adj_count`,                  
+                `CD8_Tn_p2adj_count`,
+                `CD8_CD38+_p1_count`,
+                `CD8_CD38+HLADR+_p1_count`,
+                `CD8_HLADR+_p1_count`,
+                `CD8_CXCR5+_p2adj_count`,
+                `CD8_CXCR5+_Tcm_p2adj_count`,
+                `CD8_CXCR5+_Tem_p2adj_count`,
+                `CD8_CXCR5+_Tn_p2adj_count`,
+                `CD8_CXCR5+_Teff_p2adj_count`,
+                `CD3-_p1_count`,
+                `CD56bright_p1_count`,
+                `CD56bright_CD38+_p1_count`,
+                `CD56dim_p1_count`,
+                `CD56dim_CD38+_p1_count`,
+                `CD56neg_p1_count`,
+                `CD56neg_HLADR+_p1_count`,
+                `CD19+_p1_count`,
+                `B_DN_memory_IgD-CD27-_p1_count`,
+                `B_memory_IgD+CD27+_p1_count`,
+                `B_naive_IgD+CD27-_p1_count`,
+                `B_switched_memory_IgD-CD27+_p1_count`,
+                `monocytes_p1_count`,
+                `monocytes_classical_p1_count`,
+                `monocytes_int_nonclass_p1_count`)
+
+FACSdata_ofWBC <- FACSdata_ofWBC %>%
+    rename_with(~str_replace_all(.x, "p1_count", "perWBC"))%>%
+    rename_with(~str_replace_all(.x, "p2adj_count", "perWBC"))
+```
+
+## subject data
+```{r}
+df_age_sex <- read_excel("validation cohort data/VOCAAL_CMV_EBV_VZV_dataT2B1_2023-05-12.xlsx", 
+    sheet = "Sheet 2") %>%
+  select(dn_randomisatienr,id_patient,dn_usn,dn_extra_usn1,age_on_vac1,dn_geslacht) %>%
+  rename(oprnr = dn_extra_usn1) %>%
+  mutate_at(c("oprnr"), list(~as.character(.))) 
+
+df_CMV <- read_excel("validation cohort data/VOCAAL_CMV_EBV_VZV_dataT2B1_2023-05-12.xlsx", 
+    sheet = "Sheet 1") %>%
+  select(dn_randomisatienr,CMV_Seropositivity) %>%
+  drop_na() %>%
+  mutate_at(c("CMV_Seropositivity"), list(~as.factor(.))) %>%
+  mutate(CMV_Seropositivity = recode(CMV_Seropositivity,"3" = "2")) 
+
+ISA_subject <- df_CMV %>% left_join(df_age_sex) %>% select(oprnr,id_patient,dn_usn,age_on_vac1,dn_geslacht,CMV_Seropositivity) %>% drop_na() %>% arrange(desc(dn_usn)) %>% unique()
+
+```
+
+## Antibody data ISA
+```{r}
+MIA <- read_excel("validation cohort data/Numbers VOCAAL + MIAdata T0, T1 and T2, from datadase.xlsx") %>%
+  rename(oprnr=dn_extra_usn1) %>%
+  mutate_at(c("oprnr"), list(~as.character(.))) %>%
+  dplyr::select(-c(dn_randomisatienr,id_patient,dn_usn,`...5`,`...7`,`...9`,`...11`)) %>%
+  mutate_at(c("IgG_S1_BAU/ml.T1"), list(~as.numeric(.))) %>%
+  mutate_at(c("IgG_S1_BAU/ml.T2"), list(~as.numeric(.)))  %>%
+  rename(MIA_T1 = `IgG_S1_BAU/ml.T1`)%>%
+  rename(MIA_T2 = `IgG_S1_BAU/ml.T2`)
+```
+
+# Pfizer vaccination VITAL and ISA
+```{r}
+VITAL_MIA_Pfizer <- read_excel("/Users/alpercevirgel/Documents/Alper RIVM/1_Complete_analysis_per_project/VITAL database/VITAL database Alper.xlsx",
+                                    sheet = "VITAL_All data_Manuscript endpo") %>%
+  rename(subject_identifier = ID) %>%
+  mutate_at(c("subject_identifier"), list(~as.numeric(.))) %>%
+  mutate_at(c("subject_identifier"), list(~as.character(.))) %>%
+  filter(subject_identifier %in% trivac_sarsc_inclusion_pfizer) %>%
+  rename(MIA_T2 = MIA_CoV19_S1_BAU_Titer_Tc) %>%
+  rename(MIA_T1 = MIA_CoV19_S1_BAU_Titer_Tb) %>%
+  select(subject_identifier, MIA_T1, MIA_T2) %>%
+  as.data.frame() %>%
+  drop_na(MIA_T1,MIA_T2)
+VITAL_MIA_Pfizer 
+
+
+Leon_MIA_Pfizer <- MIA %>% select(oprnr, MIA_T1, MIA_T2) %>% 
+  rename(subject_identifier=oprnr)%>%
+  drop_na(MIA_T1,MIA_T2)
+
+
+VITAL_pfizer_entropy<-VITAL_MIA_Pfizer %>% 
+  left_join(entropy_scores_VITAL) %>% 
+  rename(immune_entropy = entropy_cor_T0T5num_med) %>%
+  drop_na()%>%
+  mutate(MIA_T1_log10=log10(MIA_T1),
+         MIA_T2_log10=log10(MIA_T2))
+
+Leon_pfizer_entropy<-Leon_MIA_Pfizer %>% 
+  left_join(entropy_scores_ISA) %>% 
+  rename(immune_entropy = entropy_leon) %>%
+  drop_na()%>%
+  mutate(MIA_T1_log10=log10(MIA_T1),
+         MIA_T2_log10=log10(MIA_T2))
+
+MIA_entropy_merged <- rbind(VITAL_pfizer_entropy,Leon_pfizer_entropy)
+```
+
+
