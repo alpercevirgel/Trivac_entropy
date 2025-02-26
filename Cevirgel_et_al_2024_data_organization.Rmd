@@ -8,7 +8,7 @@ output: html_document
 # library
 ```{r}
 analysis.path <- getwd()
-source("codes/library_function.R") #load the libraries
+source("library_function.R") #load the libraries
 ```
 
 # import subject data & exclusions based on inclusion and exclusion criteria
